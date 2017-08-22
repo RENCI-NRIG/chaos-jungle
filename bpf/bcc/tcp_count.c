@@ -89,7 +89,6 @@ int xdp_tcp_count_prog(struct CTXTYPE *ctx) {
     }
 
     if (h_proto == htons(ETH_P_IP)) {
-      //ip_hdr = data + nh_off;
       ip_hdr = parse_ipv4(data, nh_off, data_end);
     //else if (h_proto == htons(ETH_P_IPV6))
     //   index = parse_ipv6(data, nh_off, data_end);
