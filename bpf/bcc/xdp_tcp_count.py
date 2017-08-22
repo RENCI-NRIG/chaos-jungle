@@ -1,131 +1,43 @@
 #!/usr/bin/env python
 
 # count TCP packets from a particular source
+# using either XDP or TC BPF hooks
 
 from bcc import BPF
 import pyroute2
 import time
 import sys
+import argparse
 
 flags = 0
-def usage():
-    print("Usage: {0} [-S] <ifdev>".format(sys.argv[0]))
-    print("       -S: use skb mode\n")
-    print("e.g.: {0} eth0\n".format(sys.argv[0]))
-    exit(1)
+parser = argparse.ArgumentParser()
 
-if len(sys.argv) < 2 or len(sys.argv) > 3:
-    usage()
+parser.add_argument("interface", help="interface to bind program to")
+parser.add_argument("-s", "--source", help="TCP flow source IP address")
+parser.add_argument("-p", "--port", help="TCP flow source port")
+parser.add_argument("-t", "--tc", action="store_true", help="Use TC ingress hook instead of XDP")
 
-if len(sys.argv) == 2:
-    device = sys.argv[1]
+args = parser.parse_args()
 
-if len(sys.argv) == 3:
-    if "-S" in sys.argv:
-        # XDP_FLAGS_SKB_MODE
-        flags |= 2 << 0
+device = args.interface
 
-    if "-S" == sys.argv[1]:
-        device = sys.argv[2]
-    else:
-        device = sys.argv[1]
-
-mode = BPF.XDP
-#mode = BPF.SCHED_CLS
-
-if mode == BPF.XDP:
-    ret = "XDP_DROP"
-    ctxtype = "xdp_md"
-else:
-    ret = "TC_ACT_SHOT"
+if args.tc:
+    flags |= 2 << 0
+    mode = BPF.SCHED_CLS
+    ret = "TC_ACT_OK"
     ctxtype = "__sk_buff"
+else:
+    mode = BPF.XDP
+    ret = "XDP_PASS"
+    ctxtype = "xdp_md"
 
-# load BPF program
-b = BPF(text = """
-#define KBUILD_MODNAME "foo"
-#include <uapi/linux/bpf.h>
-#include <linux/in.h>
-#include <linux/if_ether.h>
-#include <linux/if_packet.h>
-#include <linux/if_vlan.h>
-#include <linux/ip.h>
-#include <linux/ipv6.h>
+print("Binding to {} using method {}".format(device, mode))
+    
+# load from file
 
+b = BPF(src_file = "tcp_count.c", cflags=["-w", "-DCTXTYPE=%s" % ctxtype], debug = 0)
 
-BPF_TABLE("percpu_array", uint32_t, long, dropcnt, 256);
-
-static inline int parse_ipv4(void *data, u64 nh_off, void *data_end) {
-    struct iphdr *iph = data + nh_off;
-
-    if ((void*)&iph[1] > data_end)
-        return 0;
-    return iph->protocol;
-}
-
-static inline int parse_ipv6(void *data, u64 nh_off, void *data_end) {
-    struct ipv6hdr *ip6h = data + nh_off;
-
-    if ((void*)&ip6h[1] > data_end)
-        return 0;
-    return ip6h->nexthdr;
-}
-
-int xdp_prog1(struct CTXTYPE *ctx) {
-
-    void* data_end = (void*)(long)ctx->data_end;
-    void* data = (void*)(long)ctx->data;
-
-    struct ethhdr *eth = data;
-
-    // drop packets
-    int rc = RETURNCODE; // let pass XDP_PASS or redirect to tx via XDP_TX
-    long *value;
-    uint16_t h_proto;
-    uint64_t nh_off = 0;
-    uint32_t index;
-
-    nh_off = sizeof(*eth);
-
-    if (data + nh_off  > data_end)
-        return rc;
-
-    h_proto = eth->h_proto;
-
-    if (h_proto == htons(ETH_P_8021Q) || h_proto == htons(ETH_P_8021AD)) {
-        struct vlan_hdr *vhdr;
-
-        vhdr = data + nh_off;
-        nh_off += sizeof(struct vlan_hdr);
-        if (data + nh_off > data_end)
-            return rc;
-            h_proto = vhdr->h_vlan_encapsulated_proto;
-    }
-    if (h_proto == htons(ETH_P_8021Q) || h_proto == htons(ETH_P_8021AD)) {
-        struct vlan_hdr *vhdr;
-
-        vhdr = data + nh_off;
-        nh_off += sizeof(struct vlan_hdr);
-        if (data + nh_off > data_end)
-            return rc;
-            h_proto = vhdr->h_vlan_encapsulated_proto;
-    }
-
-    if (h_proto == htons(ETH_P_IP))
-        index = parse_ipv4(data, nh_off, data_end);
-    else if (h_proto == htons(ETH_P_IPV6))
-       index = parse_ipv6(data, nh_off, data_end);
-    else
-        index = 0;
-
-    value = dropcnt.lookup(&index);
-    if (value)
-        *value += 1;
-
-    return rc;
-}
-""", cflags=["-w", "-DRETURNCODE=%s" % ret, "-DCTXTYPE=%s" % ctxtype])
-
-fn = b.load_func("xdp_prog1", mode)
+fn = b.load_func("xdp_tcp_count_prog", mode)
 
 if mode == BPF.XDP:
     b.attach_xdp(device, fn, flags)
@@ -137,18 +49,21 @@ else:
     ip.tc("add-filter", "bpf", idx, ":1", fd=fn.fd, name=fn.name,
           parent="ffff:fff2", classid=1, direct_action=True)
 
-dropcnt = b.get_table("dropcnt")
-prev = [0] * 256
-print("Printing drops per IP protocol-number, hit CTRL+C to stop")
+flowcnt = b["flowcnt"]
+#prev = [0] * 256
+print("Printing SYN packets for ports 22, 80 and other, hit CTRL+C to stop")
 while 1:
     try:
-        for k in dropcnt.keys():
-            val = dropcnt.sum(k).value
+        #b.trace_print()
+        #print dir(flowcnt)
+        for k in flowcnt.keys():
+            val = flowcnt.get(k).value
             i = k.value
-            if val:
-                delta = val - prev[i]
-                prev[i] = val
-                print("{}: {} pkt/s".format(i, delta))
+            print("{}: {} syns".format(i, val))
+#            if val:
+#                delta = val - prev[i]
+#                prev[i] = val
+ #               print("{}: {} pkt/s".format(i, delta))
         time.sleep(1)
     except KeyboardInterrupt:
         print("Removing filter from device")
