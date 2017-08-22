@@ -35,7 +35,9 @@ static inline int parse_ipv6(void *data, u64 nh_off, void *data_end) {
     return ip6h->nexthdr;
 }
 
-// get TCP SYN flag value
+// get TCP SYN flag value. BPF seems to like doing things like this
+// otherwise you get permission errors on packet access when loading (not executing)
+// the program, which indicates verifier issues
 static inline struct tcphdr* parse_tcp(void *data, u64 nh_off, void *data_end) {
   struct tcphdr *tcph = data + nh_off;
 
