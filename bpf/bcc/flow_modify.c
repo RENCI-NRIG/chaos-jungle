@@ -131,7 +131,7 @@ static inline uint16_t *parse_pld(void *data, u64 nh_off, void *data_end) {
 
 
 // note that context type is passed in as a parameter by BCC
-int xdp_tcp_mod_prog(struct CTXTYPE *ctx) {
+int xdp_flow_mod_prog(struct CTXTYPE *ctx) {
 
     void* data_end = (void*)(long)ctx->data_end;
     void* data = (void*)(long)ctx->data;
@@ -139,7 +139,7 @@ int xdp_tcp_mod_prog(struct CTXTYPE *ctx) {
     struct ethhdr *eth = data;
 
     // always pass packets 
-    int rc = XDP_PASS; 
+    int rc = RETCODE; 
     uint16_t h_proto;
     uint64_t nh_off = 0;
     struct iphdr *ip_hdr;

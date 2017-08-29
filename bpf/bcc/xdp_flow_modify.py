@@ -70,9 +70,11 @@ device = args.interface
 if args.tc:
     flags |= 2 << 0
     mode = BPF.SCHED_CLS
+    retcode = "TC_ACT_OK"
     ctxtype = "__sk_buff"
 else:
     mode = BPF.XDP
+    retcode = "XDP_PASS"
     ctxtype = "xdp_md"
 
 # list of flowspecs
@@ -92,9 +94,12 @@ print ("There are {} flowspecs\n".format(flownum))
 print("Binding to {} using method {}".format(device, mode))
     
 # load from file
-b = BPF(src_file = "tcp_modify.c", cflags=["-w", "-DCTXTYPE=%s" % ctxtype, "-DFLOWNUM=%d" % flownum], debug = 0)
+b = BPF(src_file = "flow_modify.c", cflags=["-w",
+                                            "-DCTXTYPE=%s" % ctxtype,
+                                            "-DRETCODE=%s" % retcode,
+                                            "-DFLOWNUM=%d" % flownum], debug = 0)
 
-fn = b.load_func("xdp_tcp_mod_prog", mode)
+fn = b.load_func("xdp_flow_mod_prog", mode)
 
 # attach via TC or XDP
 idx = 0
