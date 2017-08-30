@@ -53,3 +53,6 @@ packet. The count of packets actually modified is displayed for every flow
 spec.
 ```
 
+## References
+
+For kernel compatibility, consult this document: https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md
