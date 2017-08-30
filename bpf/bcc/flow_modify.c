@@ -16,6 +16,7 @@ struct flowrec {
   uint32_t saddr, daddr;
   uint16_t sport, dport;
   int udp, active;
+  uint32_t cnt, idx, modded;
 };
 
 // if no flowspecs are given, flownum will be 0 and we can't have that
@@ -139,7 +140,7 @@ int xdp_flow_mod_prog(struct CTXTYPE *ctx) {
     struct ethhdr *eth = data;
 
     // always pass packets 
-    int rc = RETCODE; 
+    int rc = RETCODE;
     uint16_t h_proto;
     uint64_t nh_off = 0;
     struct iphdr *ip_hdr;
@@ -235,9 +236,15 @@ int xdp_flow_mod_prog(struct CTXTYPE *ctx) {
 
 	  matchtcp:
 	    if (match > 0) {
-	      bpf_trace_printk("match TCP\n");
-	      //  int ret = swapu16(pld, data_end, 2, 4);
-	      //bpf_trace_printk("tcp_header length %d ret=%d\n", tcp_hdr->doff, ret);
+	      lock_xadd(&rec->cnt, 1);
+	      if (rec->cnt == PKTIDX) {
+		lock_xadd(&rec->modded, 1);
+		if (REALLYMODIFY > 0)
+		  swapu16(pld, data_end, 2, 4);
+		//else
+		//  bpf_trace_printk("match TCP\n");
+		rec->cnt = 0;
+	      }
 	    }
 	  } 
 	}
@@ -286,8 +293,15 @@ int xdp_flow_mod_prog(struct CTXTYPE *ctx) {
 
 	  matchudp:
 	    if (match > 0) {
-	      bpf_trace_printk("match UDP\n");
-	      //  int ret = swapu16(pld, data_end, 2, 4);
+	      lock_xadd(&rec->cnt, 1);
+	      if (rec->cnt == PKTIDX) {
+		lock_xadd(&rec->modded, 1);
+		if (REALLYMODIFY > 0)
+		  swapu16(pld, data_end, 2, 4);
+		//else
+		//  bpf_trace_printk("match UDP\n");
+		rec->cnt = 0;
+	      }
 	    }
 	  }
 	}

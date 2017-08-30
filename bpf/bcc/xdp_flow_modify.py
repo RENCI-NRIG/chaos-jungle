@@ -23,6 +23,12 @@ def hostnameToLong(ip):
     # always produces a tuple, so take 0th index
     return socket.htonl(struct.unpack("!L", packetIP)[0])
 
+def longToIP(l):
+    """Return string representing IP address of host"""
+    if l is None:
+        return ""
+    return socket.inet_ntop(socket.AF_INET, struct.pack("!I", socket.ntohl(l)))
+
 def portToShort(port):
     """Return 16-bit representation of port in network byte order"""
     if port is None:
@@ -37,8 +43,9 @@ def protoUdp(proto):
         return 1
     return 0
 
-def unloadBPF(mode, idx):
-    print "Unloading BPF"
+def unloadBPF(mode, modestring, quiet):
+    if not quiet:
+        print ("Unloading BPF mode {}".format(modestring))
     if mode == BPF.XDP:
         b.remove_xdp(device)
     else:
@@ -50,11 +57,17 @@ parser = argparse.ArgumentParser(epilog="""
 Each flow can be specified as src=a.b.c.d,dst=m.n.o.p,sport=X,dport=Y\n
 Any of the flow parameters can be omitted and specified in any order.
 No spaces are allowed. Up to 5 flowspecs are allowed.
+
+The program does NOT do most-specific flow matching. Instead the first match
+always wins, others are not examined.
 """)
 
 parser.add_argument("interface", help="interface to bind program to")
 parser.add_argument("--flow", action="append", help="flow specifier")
-parser.add_argument("-t", "--tc", action="store_true", help="Use TC ingress hook instead of XDP")
+parser.add_argument("-t", "--tc", action="store_true", help="Use TC ingress hook instead of XDP (wider compatibility)")
+parser.add_argument("-e", "--emulate", action="store_true", help="Count packet modify events without doing anything to them")
+parser.add_argument("-i", "--index", help="Modify every i-th packet in each flow", type=int, default=100)
+parser.add_argument("-q", "--quiet", action="store_true", help="Be quiet")
 
 args = parser.parse_args()
 
@@ -70,10 +83,12 @@ device = args.interface
 if args.tc:
     flags |= 2 << 0
     mode = BPF.SCHED_CLS
+    modestring = "TC CLASSIFIER"
     retcode = "TC_ACT_OK"
     ctxtype = "__sk_buff"
 else:
     mode = BPF.XDP
+    modestring = "XDP"
     retcode = "XDP_PASS"
     ctxtype = "xdp_md"
 
@@ -90,14 +105,24 @@ if args.flow:
 else:
     warnings.warn("WARNING: All TCP flows entering interface {} will be modified".format(device))
 
-print ("There are {} flowspecs\n".format(flownum))
-print("Binding to {} using method {}".format(device, mode))
-    
+if args.emulate:
+    reallymodify=0
+else:
+    reallymodify=1
+
+pktidx = args.index
+
+if not args.quiet:
+    print("There are {} flowspecs, modifying every {}th packet".format(flownum, pktidx))
+    print("Binding to {} using method {}\n".format(device, modestring))
+
 # load from file
 b = BPF(src_file = "flow_modify.c", cflags=["-w",
                                             "-DCTXTYPE=%s" % ctxtype,
                                             "-DRETCODE=%s" % retcode,
-                                            "-DFLOWNUM=%d" % flownum], debug = 0)
+                                            "-DFLOWNUM=%d" % flownum,
+                                            "-DPKTIDX=%d" % pktidx,
+                                            "-DREALLYMODIFY=%d" % reallymodify], debug = 0)
 
 fn = b.load_func("xdp_flow_mod_prog", mode)
 
@@ -114,7 +139,7 @@ else:
           parent="ffff:fff2", classid=1, direct_action=True)
 
 # be sure to cleanup on exit
-atexit.register(unloadBPF, mode, idx)
+atexit.register(unloadBPF, mode, modestring, args.quiet)
 
 # fill out flowspecs
 flowspecs = b["flowspecs"]
@@ -136,11 +161,28 @@ if args.flow:
 
 while 1:
     try:
-        (saddr, daddr) = b.trace_print()
-        print("Entry has {} {}\n".format(saddr, daddr))
+        #if args.emulate:
+        #    (saddr, daddr) = b.trace_print()
+        #    print("Entry has {} {}\n".format(saddr, daddr))
+        if not args.quiet:
+            for k in flowspecs.keys():
+                leaf = flowspecs[k]
+                if leaf.udp == 1:
+                    proto = "udp"
+                else:
+                    proto = "tcp"
+                    print("{}: <{} {}:{} -> {}:{}> {} pkt mods".format(k.value,
+                                                                       proto,
+                                                                       longToIP(leaf.saddr),
+                                                                       socket.ntohs(leaf.sport),
+                                                                       longToIP(leaf.daddr),
+                                                                       socket.ntohs(leaf.dport),
+                                                                       leaf.modded))
+            print("")
         time.sleep(1)
     except KeyboardInterrupt:
-        print("Removing filter from device")
         break;
+
+# the end
 
 
