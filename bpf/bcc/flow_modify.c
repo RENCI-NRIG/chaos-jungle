@@ -179,14 +179,6 @@ int xdp_flow_mod_prog(struct CTXTYPE *ctx) {
         ip_hdr = 0;
 
     if (ip_hdr != 0) {
-      //int idx = 0;
-      //struct flowrec *res;
-      //res=flowspecs.lookup(&idx);
-      //if (res != NULL) {
-      //bpf_trace_printk("%d %d\n", res->saddr, res->daddr);
-      //bpf_trace_printk("%d %d\n", res->sport, res->dport);
-      //bpf_trace_printk("%d %d\n", res->udp, res->active);
-      //}
       if (ip_hdr->protocol == IPPROTO_TCP) {
 	nh_off += ip_hdr->ihl << 2;
 	tcp_hdr = parse_tcp(data, nh_off, data_end);
@@ -238,11 +230,11 @@ int xdp_flow_mod_prog(struct CTXTYPE *ctx) {
 	    if (match > 0) {
 	      lock_xadd(&rec->cnt, 1);
 	      if (rec->cnt == PKTIDX) {
-		lock_xadd(&rec->modded, 1);
-		if (REALLYMODIFY > 0)
-		  swapu16(pld, data_end, 2, 4);
-		//else
-		//  bpf_trace_printk("match TCP\n");
+		if (REALLYMODIFY > 0) {
+		  int swapres = swapu16(pld, data_end, SWAP1, SWAP2);
+		  if (swapres == 1)
+		    lock_xadd(&rec->modded, 1);
+		}
 		rec->cnt = 0;
 	      }
 	    }
@@ -293,13 +285,13 @@ int xdp_flow_mod_prog(struct CTXTYPE *ctx) {
 
 	  matchudp:
 	    if (match > 0) {
-	      lock_xadd(&rec->cnt, 1);
 	      if (rec->cnt == PKTIDX) {
-		lock_xadd(&rec->modded, 1);
-		if (REALLYMODIFY > 0)
-		  swapu16(pld, data_end, 2, 4);
-		//else
-		//  bpf_trace_printk("match UDP\n");
+		lock_xadd(&rec->cnt, 1);
+		if (REALLYMODIFY > 0) {
+		  int swapres = swapu16(pld, data_end, SWAP1, SWAP2);
+		  if (swapres == 1)
+		    lock_xadd(&rec->modded, 1);
+		}
 		rec->cnt = 0;
 	      }
 	    }

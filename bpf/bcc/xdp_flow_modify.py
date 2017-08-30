@@ -54,19 +54,23 @@ def unloadBPF(mode, modestring, quiet):
 
 flags = 0
 parser = argparse.ArgumentParser(epilog="""
-Each flow can be specified as src=a.b.c.d,dst=m.n.o.p,sport=X,dport=Y\n
+Each FLOW can be specified as src=a.b.c.d,dst=m.n.o.p,sport=X,dport=Y\n
 Any of the flow parameters can be omitted and specified in any order.
 No spaces are allowed. Up to 5 flowspecs are allowed.
-
 The program does NOT do most-specific flow matching. Instead the first match
 always wins, others are not examined.
+Packet modification may fail if modify indices fall outside the segment length,
+in which case the program will attempt to modify the current + INDEX packet.
+The count of packets actually modified is displayed for every flow spec.
 """)
 
 parser.add_argument("interface", help="interface to bind program to")
-parser.add_argument("--flow", action="append", help="flow specifier")
-parser.add_argument("-t", "--tc", action="store_true", help="Use TC ingress hook instead of XDP (wider compatibility)")
+parser.add_argument("-f", "--flow", action="append", help="flow specifier")
+parser.add_argument("-t", "--tc", action="store_true", help="Use TC ingress hook instead of XDP (wider compatibility, but lower performance)")
 parser.add_argument("-e", "--emulate", action="store_true", help="Count packet modify events without doing anything to them")
 parser.add_argument("-i", "--index", help="Modify every i-th packet in each flow", type=int, default=100)
+parser.add_argument("--s1", help="u16 index to swap in payload", type=int, default=2)
+parser.add_argument("--s2", help="u16 index to swap in payload", type=int, default=4)
 parser.add_argument("-q", "--quiet", action="store_true", help="Be quiet")
 
 args = parser.parse_args()
@@ -113,7 +117,7 @@ else:
 pktidx = args.index
 
 if not args.quiet:
-    print("There are {} flowspecs, modifying every {}th packet".format(flownum, pktidx))
+    print("There are {} flowspecs, trying to modify every {}th packet by swapping 16-bit aligned values at {} and {} in payloads".format(flownum, pktidx, args.s1, args.s2))
     print("Binding to {} using method {}\n".format(device, modestring))
 
 # load from file
@@ -122,6 +126,8 @@ b = BPF(src_file = "flow_modify.c", cflags=["-w",
                                             "-DRETCODE=%s" % retcode,
                                             "-DFLOWNUM=%d" % flownum,
                                             "-DPKTIDX=%d" % pktidx,
+                                            "-DSWAP1=%d" % args.s1,
+                                            "-DSWAP2=%d" % args.s2,
                                             "-DREALLYMODIFY=%d" % reallymodify], debug = 0)
 
 fn = b.load_func("xdp_flow_mod_prog", mode)
