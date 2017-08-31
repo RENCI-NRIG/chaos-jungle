@@ -12,7 +12,6 @@ import argparse
 import collections
 import socket
 import struct
-import warnings
 import atexit
 
 def hostnameToLong(ip):
@@ -107,7 +106,7 @@ if args.flow:
         print("Too manu flowspecs ({}), exiting. Only 5 allowed".format(flownum))
         sys.exit(1)
 else:
-    warnings.warn("WARNING: All TCP flows entering interface {} will be modified".format(device))
+    print("WARNING: All TCP flows entering interface {} will be modified".format(device))
 
 if args.emulate:
     reallymodify=0
