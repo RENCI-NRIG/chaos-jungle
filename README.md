@@ -11,7 +11,7 @@ Flow modification is performed by inserting BPF programs into kernel at either X
 
 The program can be instructed to keep track of up to 5 different flowspecs (limited to src/dst addresses and port numbers and a protocol discriminator - TCP/UDP). Within each flow matching a given flowspec it will attempt to modify I-th packet in the flow. A modification may fail if one or both swap indices fall outside the payload boundary. 
 
-By default the program attempts to use the XDP hook, however this has limited compatibility, requiring an XDP-compatible driver, like e1000. This option provides the highest performance. For wider compatibility use the TC classifier hook. 
+By default the program attempts to use the XDP hook, however this has limited compatibility, requiring an XDP-compatible driver, like e1000. This option provides the highest performance. For wider compatibility use the TC classifier hook. BPF with TC and XDP kernel support is required. This code was tested on Fedora 25 with kernel 4.13.0-0.rc5.git0.2.fc27.x86_64. The vagrant directory contains the appropriate configuration. 
 
 ## Examples of operation
 
@@ -53,3 +53,6 @@ packet. The count of packets actually modified is displayed for every flow
 spec.
 ```
 
+## References
+
+For kernel compatibility, consult this document: https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md
