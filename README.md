@@ -8,7 +8,7 @@ Chaos Jungle is a set of mechanisms for introducing disruptions into the work of
 
 - vagrant/ contains various Vagrant configurations for working with XDP
 - vagrant/xdp-fedora25 - based on Fedora 25 and kernel 4.13
-- bpf/bcc contains the BCC flow modification code code
+- bpf/bcc contains the BCC flow modification code 
 
 ## Flow Modification
 
