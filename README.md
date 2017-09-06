@@ -1,11 +1,16 @@
 # chaos-jungle
 
+## Overview
+
+Chaos Jungle is a set of mechanisms for introducing disruptions into the work of distributed computational workflows. Those include deliberately degrading the performance of various components of the workflow infrastructure and introducing errors into data transfers during workflow execution.
+
+## Directory structure
+
 - vagrant/ contains various Vagrant configurations for working with XDP
 - vagrant/xdp-fedora25 - based on Fedora 25 and kernel 4.13
-
 - bpf/bcc contains the BCC flow modification code code
 
-## Overview
+## Flow Modification
 
 Flow modification is performed by inserting BPF programs into kernel at either XDP or TC classifier hooks to manipulate TCP and UDP payloads without affecting respective checksums. The manipulation is achieved by swapping 16-bit aligned values within the segment/payload.
 
