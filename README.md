@@ -18,7 +18,7 @@ The program can be instructed to keep track of up to 5 different flowspecs (limi
 
 By default the program attempts to use the XDP hook, however this has limited compatibility, requiring an XDP-compatible driver, like e1000. This option provides the highest performance. For wider compatibility use the TC classifier hook. BPF with TC and XDP kernel support is required. This code was tested on Fedora 25 with kernel 4.13.0-0.rc5.git0.2.fc27.x86_64. The vagrant directory contains the appropriate configuration. 
 
-## Examples of operation
+### Examples of operation
 
 $ sudo ./xdp_flow_modify.py -f src=hostname.uni.edu,sport=80 --s1 10 --s2 20 -i 10 enp0s3
 
@@ -26,7 +26,7 @@ Modify each 10th packet in a flow from hostname.uni.edu:80 by swapping 10th and 
 
 By default the program prints out counts of modified packets for each flowspec. Flowspecs can be added to invocation by adding -f or --flow options followed by flowspec. 
 
-## Full usage details
+### Full usage details
 ```
 usage: xdp_flow_modify.py [-h] [-f FLOW] [-t] [-e] [-i INDEX] [--s1 S1]
                           [--s2 S2] [-q]
