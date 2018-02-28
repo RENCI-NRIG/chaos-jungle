@@ -9,6 +9,7 @@ Chaos Jungle is a set of mechanisms for introducing disruptions into the work of
 - vagrant/ contains various Vagrant configurations for working with XDP
 - vagrant/xdp-fedora25 - based on Fedora 25 and kernel 4.13
 - bpf/bcc contains the BCC flow modification code 
+- TC/ contains the instructions on utilizing Linux Traffic Control to generate synthetic anomaly network traffic
 
 ## Flow Modification
 
@@ -57,6 +58,9 @@ length, in which case the program will attempt to modify the current + INDEX
 packet. The count of packets actually modified is displayed for every flow
 spec.
 ```
+
+## Linux Traffic Control
+Linux traffic control (tc) is an efficient toolset to configure the Linux kernel packet scheduler. In chaos jungle, we use TC to add synthetic delay, packet loss, jitter, etc. TC should be available in most of Linux distributions. We provide a list of sample TC commands in TC/ directory.
 
 ## References
 
