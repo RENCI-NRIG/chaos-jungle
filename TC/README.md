@@ -33,4 +33,4 @@ If the first packet gets a random delay of 100ms (100ms base - 0ms jitter) and t
 
 ## References
 
-For kernel compatibility, consult this document: https://wiki.linuxfoundation.org/networking/netem
+For more information, consult this document: https://wiki.linuxfoundation.org/networking/netem
