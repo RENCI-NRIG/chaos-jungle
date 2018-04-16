@@ -62,6 +62,14 @@ spec.
 ## Linux Traffic Control
 Linux traffic control (tc) is an efficient toolset to configure the Linux kernel packet scheduler. In chaos jungle, we use TC to add synthetic delay, packet loss, jitter, etc. TC should be available in most of Linux distributions. We provide a list of sample TC commands in TC/ directory.
 
+## Filesystem
+Chaos Jungle will be extended to support introducing filesystem impairments. Some references
+- https://github.com/irods/mungefs
+- https://blitiri.com.ar/p/libfiu/
+- https://www.kernel.org/doc/Documentation/device-mapper/delay.txt
+- https://www.kernel.org/doc/Documentation/device-mapper/dm-flakey.txt
+- https://www.kernel.org/doc/Documentation/fault-injection/fault-injection.txt
+
 ## References
 
 For kernel compatibility, consult this document: https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md
