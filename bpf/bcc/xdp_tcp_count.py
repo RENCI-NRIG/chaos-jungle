@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # count TCP packets from a particular source
 # using either XDP or TC BPF hooks
