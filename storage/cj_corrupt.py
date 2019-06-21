@@ -54,65 +54,56 @@ class Corruptor:
         global disk
 
         # df filename
-        command_line = 'df -Th {}'.format(filename)
-        args = shlex.split(command_line)
-        self.logger.debug(args)
-        try:
-            if sys.version_info[0] >= 3:
-                output = subprocess.check_output(args,encoding='UTF-8')
-            else:
-                output = subprocess.check_output(args)
-        except subprocess.CalledProcessError:
-            return -1
-        else:
-            self.logger.debug(output)
-
+        #
         # parse df output:
         # Filesystem              Type  Size  Used Avail Use% Mounted on
         # /dev/mapper/centos-root xfs    17G  1.8G   16G  11% /
         #
+        command_line = 'df -Th {}'.format(filename)
+        args = shlex.split(command_line)
+        ret, output = self.call_subprocess(args)
+        if ret != 0:
+            self.logger.error("get_file_info fail")
+            return ret
+
         lines = output.splitlines()
-        if len(lines) >= 2 and (lines[0].split(' ',1)[0] == 'Filesystem'): # we expect 2 lines with first line start with 'Filesystem'
-            disk = re.split('\s+',lines[1])[0]
-            fs_type = re.split('\s+',lines[1])[1]
+        if len(lines) >= 2 and (lines[0].split(' ', 1)[0] == 'Filesystem'): # we expect 2 lines with first line start with 'Filesystem'
+            (disk, fs_type, _) = lines[1].split(None, 2)
             self.logger.info('disk = {}, type = {}'.format(disk, fs_type))
         else:
             return -1
 
         # filefrag -e
-        command_line = '/usr/sbin/filefrag -b4096 -s -e {}'.format(filename)
-        args = shlex.split(command_line)
-        self.logger.debug(args)
-        try:
-            if sys.version_info[0] >= 3:
-                output = subprocess.check_output(args,encoding='UTF-8')
-            else:
-                output = subprocess.check_output(args)
-        except subprocess.CalledProcessError:
-            return -1
-        else:
-            self.logger.debug(output)
-
-        # parse filefrag output:
+        #
         # Filesystem type is: 58465342
         # File size of /tmp/testfile.txt is 10485760 (2560 blocks of 4096 bytes)
         # ext:     logical_offset:        physical_offset: length:   expected: flags:
-        # 0:        0..    2559:    1244591..   1247150:   2560:             eof
+        #   0:        0..    2559:    1244591..   1247150:   2560:             eof
         # /tmp/testfile.txt: 1 extent found
         #
+        command_line = '/usr/sbin/filefrag -b4096 -s -e {}'.format(filename)
+        args = shlex.split(command_line)
+        ret, output = self.call_subprocess(args)
+        if ret != 0:
+            self.logger.error("get_file_info fail")
+            return ret
+
+        EXTRA_LINES = 4                 # as above example, we only need line 3
         lines = output.splitlines()
-        if len(lines) < 5: # we expect 5 lines at least
-            return -1
-        expected_extent_count = len(lines) - 4
-        for i in range(expected_extent_count):
-            words = lines[3+i].split()
-            extent_number = int(re.split(':|\s+',words[0])[0])
-            if extent_number != i:
-                return -1
-            begin = int(re.split(':|\s+|\.+',words[3])[0])
-            end = int(re.split(':|\s+|\.+',words[4])[0])
-            if begin == 0 or end == 0:
-                return -1   # something wrong, can't be 0
+        extent_count = len(lines) - EXTRA_LINES
+        if extent_count <= 0 :
+            return -1                   # no valid extent
+
+        for i in range(extent_count):
+            (s_extent_number, _, _, s_begin, s_end, _) = re.split(r'\b\D+',lines[3+i], 5)
+            extent_number = int(s_extent_number)
+            begin = int(s_begin)
+            end = int(s_end)
+            self.logger.debug("ext={}, begin={}, end={}".format(extent_number,begin, end))
+
+            if extent_number != i or begin == 0 or end == 0:
+                return -1   # something wrong, begin/end can't be 0
+
             array_extent_info.insert(extent_number, [begin, end])
             self.logger.debug(array_extent_info)
         return 0
@@ -241,12 +232,15 @@ class Corruptor:
     def call_subprocess(self, args):
         self.logger.debug(args)
         try:
-            output = subprocess.check_output(args, stderr=subprocess.STDOUT)
+            if sys.version_info[0] >= 3:
+                output = subprocess.check_output(args,encoding='UTF-8', stderr=subprocess.STDOUT)
+            else:
+                output = subprocess.check_output(args, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError:
-            return -1
+            return (-1, None)
         else:
             self.logger.debug(output)
-        return 0
+        return (0, output)
 
 
     def dd_read_data(self, filename, disk, target_block):
@@ -254,7 +248,7 @@ class Corruptor:
         if_str = 'if={}'.format(disk)
         of_str = 'of={}'.format(self._tmpfile)
         args = ['dd', 'bs=4096', 'count=1', skip_str, if_str, of_str]
-        ret = self.call_subprocess(args)
+        ret, output = self.call_subprocess(args)
         if ret != 0:
             self.logger.error("dd_read_data fail")
         return ret
@@ -266,7 +260,7 @@ class Corruptor:
         if_str = 'if={}'.format(self._tmpfile)
         of_str = 'of={}'.format(disk)
         args = ['dd', 'bs=4096', 'count=1', if_str, of_str, seek_str, 'oflag=direct', 'conv=notrunc']
-        ret = self.call_subprocess(args)
+        ret, output  = self.call_subprocess(args)
         if ret == 0:
             self.userlogger.info('{} END success'.format(op))
         else:
@@ -281,7 +275,8 @@ class Corruptor:
             os.fsync(fd)    # to make drop cache effective, first call fsync to force write to disk
         of_str = 'of={}'.format(filename)
         args = ['dd', of_str, 'oflag=nocache', 'conv=notrunc,fdatasync', 'count=0']
-        return self.call_subprocess(args)
+        ret, output = self.call_subprocess(args)
+        return ret
         
 
     def has_been_corrupted(self, filename):
@@ -299,7 +294,7 @@ class Corruptor:
         """ Corrupt the file
         """
         if not os.path.isfile(filename) or os.path.getsize(filename) == 0:
-            self.logger.warning('file not existed or size = 0')
+            self.logger.warning('{}, file not existed or size = 0'.format(filename))
             return -1
 
         if self.has_been_corrupted(filename):
@@ -390,42 +385,53 @@ def run_corrupt(args):
             cj.logger.info('Nothing happened this time')
             return
 
-    if args.target_directory:
-        if not args.target_file:
-            sys.exit('must provide file pattern by -f')
-        else:
-            cj.corrupt_file_under_folder(os.path.abspath(args.target_directory), args.target_file[0], args.recursive)
-    elif args.target_file:
-        if not args.wait:
+    if not args.wait:
+        if args.target_directory:
+            if not os.path.isdir(os.path.abspath(args.target_directory)):
+                print ('-d <directory> doesnt exist')
+                return
+            if not args.target_file:
+                sys.exit('must provide file pattern by -f')
+            else:
+                cj.corrupt_file_under_folder(os.path.abspath(args.target_directory), args.target_file[0], args.recursive)
+        elif args.target_file:
             for file in args.target_file:
                 cj.corrupt_file(os.path.abspath(file))
         else:
-            file = (os.path.abspath(args.target_file[0]))
-            command_line = 'inotifywait -q -e close_write {}'.format(file)
-            args = shlex.split(command_line)
-            cj.logger.debug(args)
-            cj.logger.info('wait for file {} to arrive ...'.format(file))
-            try:
-                output = subprocess.check_output(args)
-            except subprocess.CalledProcessError:
-                return -1
-            else:
-                print(output)
-                cj.corrupt_file(file)
+            sys.exit('exit(): no file or directory given')
+
     else:
-        sys.exit('exit(): no file or directory given')
+        if not args.target_directory or not args.target_file: 
+            sys.exit('exit(): file and directory must be given')
+        folder  = os.path.abspath(args.target_directory)
+        pattern = args.target_file[0]
+        if not os.path.isdir(folder):
+            sys.exit('-d <directory> doesnt exist')
+
+        cj.logger.info('waiting for file {} to arrive ...'.format(pattern))
+        command_line = 'inotifywait  -e close_write --format \'%w%f\' -r -q {}'.format(folder)
+        args = shlex.split(command_line)
+        while 1 :
+            ret, output = cj.call_subprocess(args)
+            if ret != 0 :
+                return
+            file = output.splitlines()[0]
+            print (file )
+            if fnmatch.fnmatch(file, pattern):
+                cj.corrupt_file(file)
+                break
 
 
 def main():
     parser = argparse.ArgumentParser(description='[WARNING!] The program corrupts file(s), please use it with CAUTION!')
     parser.add_argument('-f', dest="target_file", nargs='*',
-                        help='the path of target file (when -d option is not provided) or the pattern of filename to corrupt. e.g.: /tmp/abc.txt, \'*.txt\', \'*\'')
+                        help='the path of target file or the pattern of filename (pattern should be wrapped by "") to corrupt. e.g.: -f /tmp/abc.txt, -f "*.txt", -f "*"')
     parser.add_argument('-d', dest="target_directory",
                         help='the directory, under which the files will randomly selected to be corrupted')
     parser.add_argument('-r', '--recursive', action='store_true', default=False, help='match the files within the directory and its entire subtree (default: False)')
     parser.add_argument('-p', dest='probability', type=float, help='the probability of corruption (default: 1.0)')
     parser.add_argument('-q', '--quiet', action='store_true', help='Be quiet')
-    parser.add_argument('--wait', action='store_true', help='wait and corrupt a single file [-f <file>]')
+    parser.add_argument('--wait', action='store_true', help='wait and corrupt a single file [-f "pattern"] under folder [-d <directory>]')
     parser.add_argument('--revert', action='store_true', help='revert the specified corrupted file [-f <file>] or all files if -f is omitted')
     parser.add_argument('-db', dest="db_file", help='database file to replay')
 

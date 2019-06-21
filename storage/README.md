@@ -48,10 +48,10 @@ $ sudo ./cj_storage.py -f "*.pdb" -d ~/20190425T121649-0700 -r --onetime
 ```
 
 ### One-time corruption using '--wait'
-wait and corrupt ONE specific file: you need to give specific file (regex not supported) for "--wait" 
+wait and corrupt ONE matched file 
 
 ```
-$ sudo ./cj_storage.py -f ~/20190425T121649-0700/00/00/a12as_0008.pdb --wait
+$ sudo ./cj_storage.py -d ~/20190425T121649-0700 -f "*.pdb" --wait
 
 ```
 

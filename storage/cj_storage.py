@@ -106,7 +106,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='[WARNING!] The program corrupts file(s), please use it with CAUTION!')
     parser.add_argument('-f', dest="target_file", nargs='*',
-                        help='the path of target file (when -d option is not provided) or the pattern of filename to corrupt. e.g.: /tmp/abc.txt, \'*.txt\', \'*\'')
+                        help='the path of target file or the pattern of filename (pattern should be wrapped by "") to corrupt. e.g.: -f /tmp/abc.txt, -f "*.txt", -f "*"')
     parser.add_argument('-d', dest="target_directory",
                         help='the directory, under which the files will randomly selected to be corrupted ')
     parser.add_argument('-r', '--recursive', action='store_true', default=False, help='match the files within the directory and its entire subtree (default: False)')
@@ -116,7 +116,7 @@ def main():
     parser.add_argument('--onetime', action='store_true', help='just to corrupt once')
     parser.add_argument('--start', action='store_true', help='start the chaos jungle')
     parser.add_argument('--stop', action='store_true', help='stop the chaos jungle')
-    parser.add_argument('--wait', action='store_true', help='wait and corrupt a single file [-f <file>]')
+    parser.add_argument('--wait', action='store_true', help='wait and corrupt a single file [-f "pattern"] under folder [-d <directory>]')
     parser.add_argument('--revert', action='store_true', help='revert the specified corrupted file [-f <file>] or all files if -f is omitted')
     parser.add_argument('-q', '--quiet', action='store_true', help='Be quiet')
 
