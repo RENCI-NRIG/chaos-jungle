@@ -47,11 +47,18 @@ $ sudo ./cj_storage.py -f "*.pdb" -d ~/20190425T121649-0700 -r --onetime
 
 ```
 
-### One-time corruption using '--wait'
-wait and corrupt ONE matched file 
+### One-time corruption using '--wait' to wait a file with event 'close_write'
+wait and corrupt the matched file under specified directory including sub directories (e.g. ~/20190425T121649-0700/00/00/example.pdb )
 
 ```
-$ sudo ./cj_storage.py -d ~/20190425T121649-0700 -f "*.pdb" --wait
+$ sudo ./cj_storage.py -d ~/20190425T121649-0700 -f "*.pdb" --wait -r
+
+```
+
+wait and corrupt "abc.pdb" file under specified directory, NOT including sub directories (i.e. ~/20190425T121649-0700/abc.pdb )
+
+```
+$ sudo ./cj_storage.py -d ~/20190425T121649-0700 -f "abc.pdb" --wait
 
 ```
 

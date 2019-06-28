@@ -16,7 +16,6 @@ import shlex
 import configparser
 from cj_database import Database
 
-array_extent_info = []
 config_file = 'cj_storage.cfg'
 
 class Corruptor:
@@ -49,8 +48,11 @@ class Corruptor:
 
 
     def get_file_info(self, filename):
-        """ Get information of disk/extent of the file
+        """ Return (file extent information, error msg)
+
+        Get information of disk/extent of the file
         """
+
         global disk
 
         # df filename
@@ -60,18 +62,17 @@ class Corruptor:
         # /dev/mapper/centos-root xfs    17G  1.8G   16G  11% /
         #
         command_line = 'df -Th {}'.format(filename)
-        args = shlex.split(command_line)
-        ret, output = self.call_subprocess(args)
+        cmd_args = shlex.split(command_line)
+        ret, output = self.call_subprocess(cmd_args)
         if ret != 0:
-            self.logger.error("get_file_info fail")
-            return ret
+            return (None, "df cmd fail")
 
         lines = output.splitlines()
-        if len(lines) >= 2 and (lines[0].split(' ', 1)[0] == 'Filesystem'): # we expect 2 lines with first line start with 'Filesystem'
+        if len(lines) >= 2 and (lines[0].strip().startswith('Filesystem')): # we expect 2 lines with first line start with 'Filesystem'
             (disk, fs_type, _) = lines[1].split(None, 2)
             self.logger.info('disk = {}, type = {}'.format(disk, fs_type))
         else:
-            return -1
+            return (None, "unexpected df output")
 
         # filefrag -e
         #
@@ -82,39 +83,39 @@ class Corruptor:
         # /tmp/testfile.txt: 1 extent found
         #
         command_line = '/usr/sbin/filefrag -b4096 -s -e {}'.format(filename)
-        args = shlex.split(command_line)
-        ret, output = self.call_subprocess(args)
+        cmd_args = shlex.split(command_line)
+        ret, output = self.call_subprocess(cmd_args)
         if ret != 0:
-            self.logger.error("get_file_info fail")
-            return ret
+            return (None, "filefrag cmd fail")
 
-        EXTRA_LINES = 4                 # as above example, we only need line 3
+        EXTRA_LINES = 4                         # as example above, we only need 3rd line
         lines = output.splitlines()
         extent_count = len(lines) - EXTRA_LINES
         if extent_count <= 0 :
-            return -1                   # no valid extent
+            return (None, "unexpected filefrag output")
 
+        array_extent_info = []
         for i in range(extent_count):
-            (s_extent_number, _, _, s_begin, s_end, _) = re.split(r'\b\D+',lines[3+i], 5)
-            extent_number = int(s_extent_number)
-            begin = int(s_begin)
-            end = int(s_end)
-            self.logger.debug("ext={}, begin={}, end={}".format(extent_number,begin, end))
-
+            (str_extent_number, _, _, str_begin, str_end, _) = re.split(r'\b\D+', lines[3+i], 5)
+            extent_number = int(str_extent_number)
+            begin = int(str_begin)
+            end = int(str_end)
+            self.logger.debug("ext={}, begin={}, end={}".format(extent_number, begin, end))
             if extent_number != i or begin == 0 or end == 0:
-                return -1   # something wrong, begin/end can't be 0
+                return (None, "unexpected filefrag output")
 
             array_extent_info.insert(extent_number, [begin, end])
-            self.logger.debug(array_extent_info)
-        return 0
+        return (array_extent_info, "")
 
 
-    def corrupt_bit(self, filename):
+    def corrupt_bit(self, filename, array_extent_info):
         """ This function issue dd linux command to corrupt the data in disk
             Reference: https://www.gnu.org/software/coreutils/manual/html_node/dd-invocation.html#dd-invocation
         """
         # pick a target block
+
         target_block = random.randint(array_extent_info[0][0], array_extent_info[0][1])
+        self.logger.debug(array_extent_info)
         self.logger.debug('target_block is {}'.format(target_block))
         if target_block == 0:
             return -1   # something wrong, can't be 0
@@ -247,8 +248,8 @@ class Corruptor:
         skip_str = 'skip={}'.format(target_block)
         if_str = 'if={}'.format(disk)
         of_str = 'of={}'.format(self._tmpfile)
-        args = ['dd', 'bs=4096', 'count=1', skip_str, if_str, of_str]
-        ret, output = self.call_subprocess(args)
+        cmd_args = ['dd', 'bs=4096', 'count=1', skip_str, if_str, of_str]
+        ret, output = self.call_subprocess(cmd_args)
         if ret != 0:
             self.logger.error("dd_read_data fail")
         return ret
@@ -259,8 +260,8 @@ class Corruptor:
         seek_str = 'seek={}'.format(target_block)
         if_str = 'if={}'.format(self._tmpfile)
         of_str = 'of={}'.format(disk)
-        args = ['dd', 'bs=4096', 'count=1', if_str, of_str, seek_str, 'oflag=direct', 'conv=notrunc']
-        ret, output  = self.call_subprocess(args)
+        cmd_args = ['dd', 'bs=4096', 'count=1', if_str, of_str, seek_str, 'oflag=direct', 'conv=notrunc']
+        ret, output  = self.call_subprocess(cmd_args)
         if ret == 0:
             self.userlogger.info('{} END success'.format(op))
         else:
@@ -274,8 +275,8 @@ class Corruptor:
             fd = f.fileno()
             os.fsync(fd)    # to make drop cache effective, first call fsync to force write to disk
         of_str = 'of={}'.format(filename)
-        args = ['dd', of_str, 'oflag=nocache', 'conv=notrunc,fdatasync', 'count=0']
-        ret, output = self.call_subprocess(args)
+        cmd_args = ['dd', of_str, 'oflag=nocache', 'conv=notrunc,fdatasync', 'count=0']
+        ret, output = self.call_subprocess(cmd_args)
         return ret
         
 
@@ -301,11 +302,12 @@ class Corruptor:
             self.logger.warning('file already corrupted')
             return -1
 
-        if self.get_file_info(filename) == -1:
-            self.logger.warning('disk info unavailable for {}'.format(filename))
+        array_extent_info, err = self.get_file_info(filename)
+        if array_extent_info == None:
+            self.logger.error('{} error = {}'.format(filename, err))
             return -1
 
-        ret = self.corrupt_bit(filename)
+        ret = self.corrupt_bit(filename, array_extent_info)
         if ret == -1:
             self.logger.warning('Not able to corrupt - data not changed')
             return -1
@@ -337,7 +339,6 @@ class Corruptor:
             self.logger.info('no file to corrupt')
             return -1
         else:
-            #self.logger.debug(files)
             self.logger.info('files count = {}'.format(len(files)))
             victim_file = random.choice(files)
             self.logger.info('pick a victim: {}'.format(victim_file))
@@ -410,15 +411,23 @@ def run_corrupt(args):
 
         cj.logger.info('waiting for file {} to arrive ...'.format(pattern))
         command_line = 'inotifywait  -e close_write --format \'%w%f\' -r -q {}'.format(folder)
-        args = shlex.split(command_line)
-        while 1 :
-            ret, output = cj.call_subprocess(args)
-            if ret != 0 :
-                return
-            file = output.splitlines()[0]
-            print (file )
-            if fnmatch.fnmatch(file, pattern):
-                cj.corrupt_file(file)
+        cmd_args = shlex.split(command_line)
+        while 1:
+            try:
+                ret, output = cj.call_subprocess(cmd_args)
+                if ret != 0:
+                    return
+                file = output.splitlines()[0]
+                cj.logger.debug(file)
+                if args.recursive:
+                    if fnmatch.fnmatch(os.path.basename(file), pattern):
+                        cj.corrupt_file(file)
+                        break
+                else:
+                    if fnmatch.fnmatch(os.path.basename(file), pattern) and os.path.dirname(file) == os.path.abspath(args.target_directory) :
+                        cj.corrupt_file(file)
+                        break
+            except KeyboardInterrupt:
                 break
 
 
