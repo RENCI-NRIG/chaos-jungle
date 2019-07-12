@@ -110,8 +110,13 @@ class Corruptor:
         """ This function issue dd linux command to corrupt the data in disk
             Reference: https://www.gnu.org/software/coreutils/manual/html_node/dd-invocation.html#dd-invocation
         """
+
         # pick a target block
-        target_block = random.randint(array_extent_info[0][0], array_extent_info[0][1])
+        if g_corrupt_byte_index >= os.path.getsize(filename) \
+            or g_corrupt_byte_index >= ((array_extent_info[0][1]-array_extent_info[0][0]+1)*4096):
+            return -1
+        target_block = int(g_corrupt_byte_index/4096)+ array_extent_info[0][0]
+
         self.logger.debug(array_extent_info)
         self.logger.debug('target_block is {}'.format(target_block))
         if target_block == 0:
@@ -121,8 +126,8 @@ class Corruptor:
         if self.dd_read_data(filename, disk, target_block) != 0:
             return -1
 
-        # corrupt the nth bit of nth byte in tmpfile
-        nth_byte, nth_bit = g_corrupt_byte_index, 7
+        # we are corrupting the nth bit of nth byte in tmpfile
+        nth_byte, nth_bit = g_corrupt_byte_index%4096, 7
         result = self.perform_bit_inversion(nth_byte, nth_bit)
         target_value, modified_value = result[0], result[1]
 

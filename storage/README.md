@@ -7,12 +7,11 @@ This section of Chaos Jungle will introduce impairments to data in the disk.
 
 ## Prerequisites
 
-Install pip
+python3 and python-crontab 
 
 ```
-$ sudo yum install epel-release
-$ sudo yum install python-pip
-$ pip install python-crontab
+sudo apt install -y python3-pip python3-setuptools
+pip3 install python-crontab
 
 ```
 
@@ -94,6 +93,18 @@ $ sudo ./cj_storage.py -f ~/20190425T121649-0700/00/00/a12as_0008.pdb --revert
 
 ```
 
+### Corrupt a list of files
+
+```
+$ cat files.txt
+/tmp/20190425T121649-0700/00000002
+/tmp/20190425T121649-0700/00000006
+/tmp/20190425T121649-0700/00000008
+
+$ sudo ./cj_storage.py --filelist files.txt
+
+```
+
 
 ## Log files
 ```cj.log``` is user log file which contains corruption/reversion history
@@ -115,7 +126,7 @@ $ cat /var/log/cj.log
 
 ```cj_debug.log``` contains debug information
 
-The log folder path can be configured in .cfg file.  
+The log folder path can be configured in .cfg file within same directory of cj_storage.py
 
 ```
 [Paths]
@@ -128,7 +139,7 @@ log_dir = /var/log
 Chaos Jungle uses the database in order not to corrupt the same file twice.
 Chaos Jungle also provide feature to revert the corrupt data into original values based on the database records. see ```--revert``` usage
 
-The database file path can be configured in .cfg file.  
+The database file path can be configured in .cfg file within same directory of cj_storage.py
 
 ```
 [Paths]
@@ -139,31 +150,35 @@ database_file = /var/log/cj.db
 ## Full usage details
 ```
 $ ./cj_storage.py -h
-usage: cj_storage.py [-h] [-f [TARGET_FILE [TARGET_FILE ...]]]
+usage: cj_storage.py [-h] [--onetime] [--filelist INPUTFILE] [--revert]
+                     [--start] [--stop] [--wait]
+                     [-f [TARGET_FILES [TARGET_FILES ...]]]
                      [-d TARGET_DIRECTORY] [-r] [-p PROBABILITY]
-                     [-F FREQUENCY] [--onetime] [--start] [--stop] [--wait]
-                     [--revert] [-q]
+                     [-F FREQUENCY] [-i INDEX] [-q]
 
 [WARNING!] The program corrupts file(s), please use it with CAUTION!
 
 optional arguments:
   -h, --help            show this help message and exit
-  -f [TARGET_FILE [TARGET_FILE ...]]
-                        the path of target file (when -d option is not
-                        provided) or the pattern of filename to corrupt. e.g.:
-                        /tmp/abc.txt, '*.txt', '*'
+  --onetime             just to corrupt once
+  --filelist INPUTFILE  a file of file lists to corrupt
+  --revert              revert the specified corrupted file [-f <file>] or all
+                        files if -f is omitted
+  --start               start the chaos jungle
+  --stop                stop the chaos jungle
+  --wait                wait and corrupt a single file [-f "pattern"] under
+                        folder [-d <directory>]
+  -f [TARGET_FILES [TARGET_FILES ...]]
+                        the path of target file or the pattern of filename
+                        (pattern should be wrapped by "") to corrupt. e.g.: -f
+                        /tmp/abc.txt, -f "*.txt", -f "*"
   -d TARGET_DIRECTORY   the directory, under which the files will randomly
                         selected to be corrupted
   -r, --recursive       match the files within the directory and its entire
                         subtree (default: False)
   -p PROBABILITY        the probability of corruption (default: 1.0)
   -F FREQUENCY          -F 2h means every 2 hrs, -F 10m means every 10 mins
-  --onetime             just to corrupt once
-  --start               start the chaos jungle
-  --stop                stop the chaos jungle
-  --wait                wait and corrupt a single file [-f <file>]
-  --revert              revert the specified corrupted file [-f <file>] or all
-                        files if -f is omitted
+  -i INDEX              the index of byte number to corrupt
   -q, --quiet           Be quiet
 
 
