@@ -16,7 +16,7 @@ import shlex
 import configparser
 from cj_database import Database
 
-config_file = 'cj_storage.cfg'
+CONFIG_FILE = 'cj_storage.cfg'
 
 class Corruptor:
 
@@ -48,12 +48,10 @@ class Corruptor:
 
 
     def get_file_info(self, filename):
-        """ Return (file extent information, error msg)
+        """ Return (disk, file extent information, error msg)
 
         Get information of disk/extent of the file
         """
-
-        global disk
 
         # df filename
         #
@@ -65,14 +63,14 @@ class Corruptor:
         cmd_args = shlex.split(command_line)
         ret, output = self.call_subprocess(cmd_args)
         if ret != 0:
-            return (None, "df cmd fail")
+            return (None, None, "df cmd fail")
 
         lines = output.splitlines()
         if len(lines) >= 2 and (lines[0].strip().startswith('Filesystem')): # we expect 2 lines with first line start with 'Filesystem'
             (disk, fs_type, _) = lines[1].split(None, 2)
             self.logger.info('disk = {}, type = {}'.format(disk, fs_type))
         else:
-            return (None, "unexpected df output")
+            return (None, None, "unexpected df output")
 
         # filefrag -e
         #
@@ -86,13 +84,13 @@ class Corruptor:
         cmd_args = shlex.split(command_line)
         ret, output = self.call_subprocess(cmd_args)
         if ret != 0:
-            return (None, "filefrag cmd fail")
+            return (None, None, "filefrag cmd fail")
 
         EXTRA_LINES = 4                         # as example above, we only need 3rd line
         lines = output.splitlines()
         extent_count = len(lines) - EXTRA_LINES
         if extent_count <= 0 :
-            return (None, "unexpected filefrag output")
+            return (None, None, "unexpected filefrag output")
 
         array_extent_info = []
         for i in range(extent_count):
@@ -102,13 +100,13 @@ class Corruptor:
             end = int(str_end)
             self.logger.debug("ext={}, begin={}, end={}".format(extent_number, begin, end))
             if extent_number != i or begin == 0 or end == 0:
-                return (None, "unexpected filefrag output")
+                return (None, None, "unexpected filefrag output")
 
             array_extent_info.insert(extent_number, [begin, end])
-        return (array_extent_info, "")
+        return (disk, array_extent_info, "")
 
 
-    def corrupt_bit(self, filename, array_extent_info):
+    def corrupt_bit(self, filename, disk, array_extent_info):
         """ This function issue dd linux command to corrupt the data in disk
             Reference: https://www.gnu.org/software/coreutils/manual/html_node/dd-invocation.html#dd-invocation
         """
@@ -124,9 +122,8 @@ class Corruptor:
         if self.dd_read_data(filename, disk, target_block) != 0:
             return -1
 
-        # corrupt the bit in tmpfile
-        # simple version: just corrupt the 7th bit (0x80) of 1st byte (0)
-        nth_byte, nth_bit = 0,7
+        # corrupt the nth bit of nth byte in tmpfile
+        nth_byte, nth_bit = g_corrupt_byte_index, 7
         result = self.perform_bit_inversion(nth_byte, nth_bit)
         target_value, modified_value = result[0], result[1]
 
@@ -302,12 +299,12 @@ class Corruptor:
             self.logger.warning('file already corrupted')
             return -1
 
-        array_extent_info, err = self.get_file_info(filename)
+        disk, array_extent_info, err = self.get_file_info(filename)
         if array_extent_info == None:
             self.logger.error('{} error = {}'.format(filename, err))
             return -1
 
-        ret = self.corrupt_bit(filename, array_extent_info)
+        ret = self.corrupt_bit(filename, disk, array_extent_info)
         if ret == -1:
             self.logger.warning('Not able to corrupt - data not changed')
             return -1
@@ -350,7 +347,7 @@ def run_corrupt(args):
     
     config = configparser.ConfigParser()
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    config_file_path = os.path.join(dir_path, config_file) 
+    config_file_path = os.path.join(dir_path, CONFIG_FILE) 
     config.read(config_file_path)
     db_file = config['Paths']['database_file']
     log_dir = config['Paths']['log_dir']
@@ -368,6 +365,12 @@ def run_corrupt(args):
         if cj.db.connect(db_file) != 0:
             return
     cj.db.create_table()
+
+    global g_corrupt_byte_index
+    if args.index:
+        g_corrupt_byte_index = int(args.index)
+    else:
+        g_corrupt_byte_index = 0
 
     if args.revert:
         if args.target_file:
@@ -443,6 +446,7 @@ def main():
     parser.add_argument('--wait', action='store_true', help='wait and corrupt a single file [-f "pattern"] under folder [-d <directory>]')
     parser.add_argument('--revert', action='store_true', help='revert the specified corrupted file [-f <file>] or all files if -f is omitted')
     parser.add_argument('-db', dest="db_file", help='database file to replay')
+    parser.add_argument('-i', dest="index", help='the index of byte number to corrupt')
 
     # following are dummy arguments from cj_service.py
     parser.add_argument('--start', action='store_true', help=argparse.SUPPRESS)

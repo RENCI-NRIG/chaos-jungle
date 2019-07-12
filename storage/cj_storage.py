@@ -112,6 +112,7 @@ def main():
     parser.add_argument('-r', '--recursive', action='store_true', default=False, help='match the files within the directory and its entire subtree (default: False)')
     parser.add_argument('-p', dest='probability', type=float, help='the probability of corruption (default: 1.0)')
     parser.add_argument('-F', dest="frequency", help='-F 2h means every 2 hrs, -F 10m means every 10 mins')
+    parser.add_argument('-i', dest="index", help='the index of byte number to corrupt')
     parser.add_argument('-db', dest="db_file", help=argparse.SUPPRESS)
     parser.add_argument('--onetime', action='store_true', help='just to corrupt once')
     parser.add_argument('--start', action='store_true', help='start the chaos jungle')
