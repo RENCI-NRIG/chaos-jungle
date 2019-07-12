@@ -20,7 +20,7 @@ def is_cj_running():
 
 def mark_cj_running(args):
     with open(var_run_file, 'w') as f:
-        f.write('uid {} -d {} -f {}'.format(os.getuid(), args.target_directory, args.target_file))
+        f.write('uid {} -d {} -f {}'.format(os.getuid(), args.target_directory, args.target_files))
 
 def unmark_cj_running():
     if os.path.isfile(var_run_file):
@@ -82,7 +82,7 @@ def stop(mycron):
 
 
 def run(args):
-    if args.onetime or args.wait or args.revert:
+    if args.onetime or args.wait or args.revert or args.filelist:
         run_corrupt(args)
         return
 
@@ -92,12 +92,12 @@ def run(args):
         return
 
     if not args.start:
-        sys.exit('exit(): please specify your option ( --start / --stop / --reset / --onetime / --wait)')
+        sys.exit('exit(): please specify your option ( --onetime / --start / --stop / --filelist / --wait)')
 
     if args.target_directory:
-        if not args.target_file:
+        if not args.target_files:
             sys.exit('exit(): must provide file pattern by -f')
-    elif not args.target_file:
+    elif not args.target_files:
         sys.exit('exit(): no file or directory given')
     start(mycron, args)
 
@@ -105,7 +105,7 @@ def run(args):
 def main():
 
     parser = argparse.ArgumentParser(description='[WARNING!] The program corrupts file(s), please use it with CAUTION!')
-    parser.add_argument('-f', dest="target_file", nargs='*',
+    parser.add_argument('-f', dest="target_files", nargs='*',
                         help='the path of target file or the pattern of filename (pattern should be wrapped by "") to corrupt. e.g.: -f /tmp/abc.txt, -f "*.txt", -f "*"')
     parser.add_argument('-d', dest="target_directory",
                         help='the directory, under which the files will randomly selected to be corrupted ')
@@ -115,6 +115,7 @@ def main():
     parser.add_argument('-i', dest="index", help='the index of byte number to corrupt')
     parser.add_argument('-db', dest="db_file", help=argparse.SUPPRESS)
     parser.add_argument('--onetime', action='store_true', help='just to corrupt once')
+    parser.add_argument('--filelist', dest="filelist", help='a file of file lists to corrupt')
     parser.add_argument('--start', action='store_true', help='start the chaos jungle')
     parser.add_argument('--stop', action='store_true', help='stop the chaos jungle')
     parser.add_argument('--wait', action='store_true', help='wait and corrupt a single file [-f "pattern"] under folder [-d <directory>]')

@@ -16,7 +16,7 @@ import shlex
 import configparser
 from cj_database import Database
 
-CONFIG_FILE = 'cj_storage.cfg'
+CONFIG_FILE = 'cj.cfg'
 
 class Corruptor:
 
@@ -291,12 +291,16 @@ class Corruptor:
     def corrupt_file(self, filename):
         """ Corrupt the file
         """
+        if random.random() >= g_probability:
+            self.logger.info('probability = {} , not corrupting {} this time'.format(g_probability, filename))
+            return -1
+
         if not os.path.isfile(filename) or os.path.getsize(filename) == 0:
             self.logger.warning('{}, file not existed or size = 0'.format(filename))
             return -1
 
         if self.has_been_corrupted(filename):
-            self.logger.warning('file already corrupted')
+            self.logger.warning('{} is already corrupted'.format(filename))
             return -1
 
         disk, array_extent_info, err = self.get_file_info(filename)
@@ -345,74 +349,75 @@ class Corruptor:
 
 def run_corrupt(args):
     
+    # setup log and database
     config = configparser.ConfigParser()
     dir_path = os.path.dirname(os.path.realpath(__file__))
     config_file_path = os.path.join(dir_path, CONFIG_FILE) 
     config.read(config_file_path)
     db_file = config['Paths']['database_file']
     log_dir = config['Paths']['log_dir']
-
+    
+    if not db_file:
+        sys.exit('exit(): database_file configuration error')
     if not os.path.isdir(log_dir):
-        print ('log_dir in config file doesnt exist')
-        return
+        sys.exit('exit(): log_dir in config file doesnt exist')
 
     cj = Corruptor(args.quiet, log_dir)
     cj.db = Database(cj.logger)
-
-    if not db_file:
-        cj.logger.error('DatabaseFile configuration error')
-    else:
-        if cj.db.connect(db_file) != 0:
-            return
+    if cj.db.connect(db_file) != 0:
+       return
     cj.db.create_table()
 
-    global g_corrupt_byte_index
+    # settings
+    global g_probability, g_corrupt_byte_index
+    g_probability = 1
+    g_corrupt_byte_index = 0
+    if args.probability and args.probability > 0 and args.probability < 1:
+        g_probability = args.probability
+        cj.logger.info('probability = {}'.format(g_probability))
     if args.index:
         g_corrupt_byte_index = int(args.index)
-    else:
-        g_corrupt_byte_index = 0
 
-    if args.revert:
-        if args.target_file:
-            for file in args.target_file:
+    # CJ operation starts:
+    # --revert
+    if args.revert: 
+        if args.target_files:
+            for file in args.target_files:
                 cj.revert_data(os.path.abspath(file))
         else:
             cj.revert_all()
         return
 
-    if not args.probability or args.probability < 0 or args.probability > 1:
-        args.probability = 1
+    # --filelist
+    elif args.filelist: 
+        with open(os.path.abspath(args.filelist)) as f:
+            for line in f:
+                file = line.strip()
+                cj.corrupt_file(os.path.abspath(file))
 
-    if not args.wait and not args.revert: # it is corrupt operation
-        cj.logger.info('probability = {}'.format(args.probability))
-        if random.random() >= args.probability:
-            cj.logger.info('Nothing happened this time')
-            return
-
-    if not args.wait:
-        if args.target_directory:
+    # --onetime
+    elif not args.wait: # it is a normal onetime corrupt operation
+        if args.target_directory and args.target_files: # -d and -f is given
             if not os.path.isdir(os.path.abspath(args.target_directory)):
-                print ('-d <directory> doesnt exist')
-                return
-            if not args.target_file:
-                sys.exit('must provide file pattern by -f')
+                sys.exit('exit(): -d <directory> doesnt exist')
             else:
-                cj.corrupt_file_under_folder(os.path.abspath(args.target_directory), args.target_file[0], args.recursive)
-        elif args.target_file:
-            for file in args.target_file:
+                cj.corrupt_file_under_folder(os.path.abspath(args.target_directory), args.target_files[0], args.recursive)
+        elif args.target_files: # only -f is given
+            for file in args.target_files:
                 cj.corrupt_file(os.path.abspath(file))
         else:
-            sys.exit('exit(): no file or directory given')
+            sys.exit('exit(): -f option is not given')
 
-    else:
-        if not args.target_directory or not args.target_file: 
+    # --wait
+    else: 
+        if not args.target_directory or not args.target_files: 
             sys.exit('exit(): file and directory must be given')
         folder  = os.path.abspath(args.target_directory)
-        pattern = args.target_file[0]
+        pattern = args.target_files[0]
         if not os.path.isdir(folder):
-            sys.exit('-d <directory> doesnt exist')
-
+            sys.exit('exit(): -d <directory> doesnt exist')
         cj.logger.info('waiting for file {} to arrive ...'.format(pattern))
+
         command_line = 'inotifywait  -e close_write --format \'%w%f\' -r -q {}'.format(folder)
         cmd_args = shlex.split(command_line)
         while 1:
@@ -436,7 +441,7 @@ def run_corrupt(args):
 
 def main():
     parser = argparse.ArgumentParser(description='[WARNING!] The program corrupts file(s), please use it with CAUTION!')
-    parser.add_argument('-f', dest="target_file", nargs='*',
+    parser.add_argument('-f', dest="target_files", nargs='*',
                         help='the path of target file or the pattern of filename (pattern should be wrapped by "") to corrupt. e.g.: -f /tmp/abc.txt, -f "*.txt", -f "*"')
     parser.add_argument('-d', dest="target_directory",
                         help='the directory, under which the files will randomly selected to be corrupted')
@@ -447,6 +452,7 @@ def main():
     parser.add_argument('--revert', action='store_true', help='revert the specified corrupted file [-f <file>] or all files if -f is omitted')
     parser.add_argument('-db', dest="db_file", help='database file to replay')
     parser.add_argument('-i', dest="index", help='the index of byte number to corrupt')
+    parser.add_argument('--filelist', dest="filelist", help='a file of file lists to corrupt')
 
     # following are dummy arguments from cj_service.py
     parser.add_argument('--start', action='store_true', help=argparse.SUPPRESS)
