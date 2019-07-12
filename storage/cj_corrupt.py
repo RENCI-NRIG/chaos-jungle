@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 """
 
-The script will perform corruption for specific file or under specific folder
+The Corruptor perform corruption for specific file or under specific folder
 
 """
 import argparse
@@ -111,7 +111,6 @@ class Corruptor:
             Reference: https://www.gnu.org/software/coreutils/manual/html_node/dd-invocation.html#dd-invocation
         """
         # pick a target block
-
         target_block = random.randint(array_extent_info[0][0], array_extent_info[0][1])
         self.logger.debug(array_extent_info)
         self.logger.debug('target_block is {}'.format(target_block))
@@ -138,7 +137,6 @@ class Corruptor:
         self.db.insert_record(record)
         self.userlogger.info('CORRUPT record: {}'.format(record))
             
-        # drop the cache in file
         return self.dd_drop_cache(filename)
 
 
@@ -220,10 +218,7 @@ class Corruptor:
         self.logger.info('\'{}\' reverted'.format(filename))
         self.logger.info('target_block = {}, nth_byte = {}, before/after: {}/{}'.format(target_block, nth_byte, hex(ord(target_value)), hex(orig_value)))
 
-        # delete the record into database
         self.db.delete_record_of_file(filename)
-            
-        # drop the cache in file
         return self.dd_drop_cache(filename)
 
 
@@ -389,8 +384,8 @@ def run_corrupt(args):
         return
 
     # --filelist
-    elif args.filelist: 
-        with open(os.path.abspath(args.filelist)) as f:
+    elif args.inputfile:
+        with open(os.path.abspath(args.inputfile)) as f:
             for line in f:
                 file = line.strip()
                 cj.corrupt_file(os.path.abspath(file))
@@ -438,32 +433,3 @@ def run_corrupt(args):
             except KeyboardInterrupt:
                 break
 
-
-def main():
-    parser = argparse.ArgumentParser(description='[WARNING!] The program corrupts file(s), please use it with CAUTION!')
-    parser.add_argument('-f', dest="target_files", nargs='*',
-                        help='the path of target file or the pattern of filename (pattern should be wrapped by "") to corrupt. e.g.: -f /tmp/abc.txt, -f "*.txt", -f "*"')
-    parser.add_argument('-d', dest="target_directory",
-                        help='the directory, under which the files will randomly selected to be corrupted')
-    parser.add_argument('-r', '--recursive', action='store_true', default=False, help='match the files within the directory and its entire subtree (default: False)')
-    parser.add_argument('-p', dest='probability', type=float, help='the probability of corruption (default: 1.0)')
-    parser.add_argument('-q', '--quiet', action='store_true', help='Be quiet')
-    parser.add_argument('--wait', action='store_true', help='wait and corrupt a single file [-f "pattern"] under folder [-d <directory>]')
-    parser.add_argument('--revert', action='store_true', help='revert the specified corrupted file [-f <file>] or all files if -f is omitted')
-    parser.add_argument('-db', dest="db_file", help='database file to replay')
-    parser.add_argument('-i', dest="index", help='the index of byte number to corrupt')
-    parser.add_argument('--filelist', dest="filelist", help='a file of file lists to corrupt')
-
-    # following are dummy arguments from cj_service.py
-    parser.add_argument('--start', action='store_true', help=argparse.SUPPRESS)
-    parser.add_argument('--stop', action='store_true', help=argparse.SUPPRESS)
-    parser.add_argument('-F', dest="freq", help=argparse.SUPPRESS)
-    parser.add_argument('--onetime', action='store_true', help=argparse.SUPPRESS)
-
-    parser.set_defaults(func=run_corrupt)
-    args = parser.parse_args()
-    args.func(args)
-
-
-if __name__ == "__main__":
-    main()

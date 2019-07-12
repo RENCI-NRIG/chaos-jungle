@@ -29,30 +29,29 @@ def unmark_cj_running():
         except:
             return
 
-def start(mycron, args):
+def start(mycron, args): 
+
     if is_cj_running():
-        print ('Chaos jungle service is already running. use --stop first')
-        return
+        sys.exit('exit(): Chaos jungle service is already running. use --stop first')
 
-    if not args.target_directory:
-        print ('please provide -d <target_directory> when using --start')
-        return
+    if not args.target_directory or not args.target_files or not args.frequency:
+        sys.exit('exit(): please provide -d, -f and -F <frequency> when using --start')
 
-    if not args.frequency:
-        print ('please provide -F <frequency> when using --start')
-        return
+    if not args.recursive:
+        print ('RECURSIVE is OFF')
+    else:
+        print ('RECURSIVE is ON')
 
-    filepath = os.path.realpath('./cj_corrupt.py')
+    filepath = os.path.realpath(__file__)
 
     for i in range (0, len(sys.argv)-1):
         if sys.argv[i] == '-f' or sys.argv[i] == '-d':
             sys.argv[i+1] = '\'' + sys.argv[i+1] + '\''
             i += 1
 
-    print (sys.argv)
-    cmdlist = (['python3'] + [filepath] + sys.argv[1:] +['>/dev/null'] +['2>&1'])
+    sys.argv.remove('--start')
+    cmdlist = (['python3'] + [filepath] + ['--onetime'] + sys.argv[1:] +['>/dev/null'] +['2>&1'])
     cmdstr = ' '.join(cmdlist)
-    print (cmdstr)
     job = mycron.new(command=cmdstr, comment='cj_corrupt')
 
     if args.frequency.find('h') >= 0:
@@ -71,7 +70,7 @@ def start(mycron, args):
             mycron.write()
             print ('start chaos jungle service every {} min'.format(min))
             return
-    print ('invalid -F frequency')
+    sys.exit('exit(): invalid -F frequency')
 
 
 def stop(mycron):
@@ -82,29 +81,28 @@ def stop(mycron):
 
 
 def run(args):
-    if args.onetime or args.wait or args.revert or args.filelist:
-        run_corrupt(args)
-        return
-
     mycron = CronTab(user=True)
-    if args.stop:
+
+    if args.onetime or args.wait or args.revert or args.inputfile:
+        run_corrupt(args)
+    elif args.stop:
         stop(mycron)
-        return
-
-    if not args.start:
-        sys.exit('exit(): please specify your option ( --onetime / --start / --stop / --filelist / --wait)')
-
-    if args.target_directory:
-        if not args.target_files:
-            sys.exit('exit(): must provide file pattern by -f')
-    elif not args.target_files:
-        sys.exit('exit(): no file or directory given')
-    start(mycron, args)
+    elif args.start:
+        start(mycron, args)
+    else:
+        sys.exit('exit(): please specify your action ( --onetime / --start / --stop / --filelist / --wait/ --revert)')
 
 
 def main():
 
     parser = argparse.ArgumentParser(description='[WARNING!] The program corrupts file(s), please use it with CAUTION!')
+    parser.add_argument('--onetime', action='store_true', help='just to corrupt once')
+    parser.add_argument('--filelist', dest="inputfile", help='a file of file lists to corrupt')
+    parser.add_argument('--revert', action='store_true', help='revert the specified corrupted file [-f <file>] or all files if -f is omitted')
+    parser.add_argument('--start', action='store_true', help='start the chaos jungle')
+    parser.add_argument('--stop', action='store_true', help='stop the chaos jungle')
+    parser.add_argument('--wait', action='store_true', help='wait and corrupt a single file [-f "pattern"] under folder [-d <directory>]')
+
     parser.add_argument('-f', dest="target_files", nargs='*',
                         help='the path of target file or the pattern of filename (pattern should be wrapped by "") to corrupt. e.g.: -f /tmp/abc.txt, -f "*.txt", -f "*"')
     parser.add_argument('-d', dest="target_directory",
@@ -113,13 +111,6 @@ def main():
     parser.add_argument('-p', dest='probability', type=float, help='the probability of corruption (default: 1.0)')
     parser.add_argument('-F', dest="frequency", help='-F 2h means every 2 hrs, -F 10m means every 10 mins')
     parser.add_argument('-i', dest="index", help='the index of byte number to corrupt')
-    parser.add_argument('-db', dest="db_file", help=argparse.SUPPRESS)
-    parser.add_argument('--onetime', action='store_true', help='just to corrupt once')
-    parser.add_argument('--filelist', dest="filelist", help='a file of file lists to corrupt')
-    parser.add_argument('--start', action='store_true', help='start the chaos jungle')
-    parser.add_argument('--stop', action='store_true', help='stop the chaos jungle')
-    parser.add_argument('--wait', action='store_true', help='wait and corrupt a single file [-f "pattern"] under folder [-d <directory>]')
-    parser.add_argument('--revert', action='store_true', help='revert the specified corrupted file [-f <file>] or all files if -f is omitted')
     parser.add_argument('-q', '--quiet', action='store_true', help='Be quiet')
 
     parser.set_defaults(func=run)
