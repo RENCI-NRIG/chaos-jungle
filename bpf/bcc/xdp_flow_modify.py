@@ -71,6 +71,8 @@ parser.add_argument("-i", "--index", help="Modify every i-th packet in each flow
 parser.add_argument("--s1", help="u16 index to swap in payload", type=int, default=2)
 parser.add_argument("--s2", help="u16 index to swap in payload", type=int, default=4)
 parser.add_argument("-q", "--quiet", action="store_true", help="Be quiet")
+parser.add_argument("--stoptc", action='store_true', help="stop the tc ingress hook")
+parser.add_argument("--stopxdp", action='store_true', help="stop the xdp hook")
 
 args = parser.parse_args()
 
@@ -82,6 +84,14 @@ flowparser.add_argument("--dport", help="TCP flow destination port", type=int)
 flowparser.add_argument("--proto", help="Protocol TCP or UDP, defaults to TCP", choices=['tcp', 'udp'], default='tcp')
 
 device = args.interface
+
+if args.stoptc:
+    ip = pyroute2.IPRoute()
+    ipdb = pyroute2.IPDB(nl=ip)
+    idx = ipdb.interfaces[device].index
+    ip.tc("del", "clsact", idx)
+    ipdb.release()
+    exit()
 
 if args.tc:
     flags |= 2 << 0
