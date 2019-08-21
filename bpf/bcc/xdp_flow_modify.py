@@ -71,8 +71,9 @@ parser.add_argument("-i", "--index", help="Modify every i-th packet in each flow
 parser.add_argument("--s1", help="u16 index to swap in payload", type=int, default=2)
 parser.add_argument("--s2", help="u16 index to swap in payload", type=int, default=4)
 parser.add_argument("-q", "--quiet", action="store_true", help="Be quiet")
-parser.add_argument("--stoptc", action='store_true', help="stop the tc ingress hook")
+parser.add_argument("--stoptc", action='store_true', help="stop the tc hook")
 parser.add_argument("--stopxdp", action='store_true', help="stop the xdp hook")
+parser.add_argument("--duplex", action='store_true', help="corrupt both ingress/egress when using TC")
 
 args = parser.parse_args()
 
@@ -152,6 +153,9 @@ else:
     ip.tc("add", "clsact", idx)
     ip.tc("add-filter", "bpf", idx, ":1", fd=fn.fd, name=fn.name,
           parent="ffff:fff2", classid=1, direct_action=True)
+    if args.duplex: # corrupt egress as well
+        ip.tc("add-filter", "bpf", idx, ":1", fd=fn.fd, name=fn.name,
+          parent="ffff:fff3", classid=1, direct_action=True)
 
 # be sure to cleanup on exit
 atexit.register(unloadBPF, mode, modestring, args.quiet)
