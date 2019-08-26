@@ -1,0 +1,8 @@
+#!/bin/bash
+
+echo "Faking a Rosetta run..."
+
+pegasus-keg -T 240 -o ${4}score.sc=50M
+
+echo "All done!"
+

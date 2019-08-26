@@ -1,0 +1,100 @@
+description: Condor master and workers deployed with Heat on Chameleon
+heat_template_version: '2015-10-15'
+outputs:
+  condor_master_ip:
+    description: Public IP address of the Condor master
+    value:
+      get_attr: [condor_master_floating_ip, ip]
+  condor_worker_ips:
+    description: Private IP addresses of the Condor workers
+    value:
+      get_attr: [condor_workers, first_address]
+parameters:
+  condor_worker_count:
+    constraints:
+    - description: There must be at least one client.
+      range: {min: 1}
+    default: 2
+    description: Number of NFS client instances
+    type: number
+  key_name:
+    constraints:
+    - {custom_constraint: nova.keypair}
+    description: Name of a KeyPair to enable SSH access to the instance
+    type: string
+  network_cidr: {default: 192.168.100.0/24, description: Cidr of the network, type: string}
+  network_name: {description: Name of the network to use., type: string}
+  reservation_id:
+    constraints:
+    - {custom_constraint: blazar.reservation}
+    description: ID of the Blazar reservation to use for launching instances.
+    type: string
+resources:
+  condor_master:
+    properties:
+      flavor: baremetal
+      image: CC-CentOS7
+      key_name: {get_param: key_name}
+      name: master
+      networks:
+      - network: {get_resource: condor_network}
+      scheduler_hints:
+        reservation: {get_param: reservation_id}
+      user_data:
+        str_replace:
+          params:
+            $worker_ips:
+              get_attr: [condor_workers, first_address]
+            $worker_names:
+              get_attr: [condor_workers, name]
+          template: ''
+    type: OS::Nova::Server
+  condor_master_floating_ip:
+    properties: {pool: public}
+    type: OS::Nova::FloatingIP
+  condor_master_ip_association:
+    properties:
+      floating_ip: {get_resource: condor_master_floating_ip}
+      server_id: {get_resource: condor_master}
+    type: OS::Nova::FloatingIPAssociation
+  condor_network:
+    properties:
+      name: {get_param: network_name}
+    type: OS::Neutron::Net
+  condor_router_interface:
+    properties:
+      router: {get_resource: router_to_ext}
+      subnet: {get_resource: condor_subnet}
+    type: OS::Neutron::RouterInterface
+  condor_subnet:
+    properties:
+      cidr: {get_param: network_cidr}
+      enable_dhcp: true
+      name: condor_subnet
+      network: {get_resource: condor_network}
+    type: OS::Neutron::Subnet
+  condor_workers:
+    properties:
+      count: {get_param: condor_worker_count}
+      resource_def:
+        properties:
+          flavor: baremetal
+          image: CC-CentOS7
+          key_name: {get_param: key_name}
+          name: worker-%index%
+          networks:
+          - network: {get_resource: condor_network}
+          scheduler_hints:
+            reservation: {get_param: reservation_id}
+          user_data:
+            str_replace:
+              params:
+                $worker_count: {get_param: condor_worker_count}
+              template: ''
+        type: OS::Nova::Server
+    type: OS::Heat::ResourceGroup
+  router_to_ext:
+    properties:
+      external_gateway_info: {network: public}
+      name: condor_router
+    type: OS::Neutron::Router
