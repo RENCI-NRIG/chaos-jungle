@@ -25,12 +25,18 @@ class Field(IntEnum):
     SRC_R = auto()
     DEST_S = auto()
     LABEL = auto()
+    RUN = auto()
+    FILE = auto()
     # following not filled yet
     #ORIGIN = auto()
     #OSGSITE = auto()
 
 
 def debug_print(str):
+    #print(str)
+    return
+
+def only_print(str):
     #print(str)
     return
 
@@ -51,7 +57,8 @@ def get_row_in_matrix(key):
     else:
         flowID = len(flowIDTable)
         flowIDTable[key] = flowID
-        add_new_row_in_matrix()
+        add_new_row_in_matrix() 
+        matrix[flowID][Field.RUN] = key.split(':')[0]
     return flowID
 
 
@@ -64,10 +71,12 @@ def parse_logs():
         filepath = os.path.join(result_dir, matched_file)
         if os.path.isfile(filepath):
             filenumber = 0
+
+            dest_node = os.path.basename(filepath).split('_')[0]
+            src_node = os.path.basename(filepath).split('_')[3]
+            src_node = src_node[:len(src_node)-4]
+            run2=os.path.basename(filepath).split('_')[1]
             with open(filepath, "r") as f:
-                dest_node = os.path.basename(filepath).split('_')[0]
-                src_node = os.path.basename(filepath).split('_')[3]
-                src_node = src_node[:len(src_node)-4]
                 #in_block = False
                 l=0
                 retry_count = 0
@@ -122,10 +131,28 @@ def parse_logs():
                         matrix[flowID][Field.FILESIZE] = filesize
                         matrix[flowID][Field.THROUGHPUT] = throughput
                         matrix[flowID][Field.RETRIES] = retry_count
-
+                        matrix[flowID][Field.FILE] = matched_file
                         retry_count = 0
 
-                print ('Parsed wget {}, total {} file records'.format(matched_file, filenumber))
+            # following checks whether there are missing files which are not in wget result
+            filelist_file = os.path.join(result_dir, 'allfiles')
+            miss_count = 0
+            with open(filelist_file, "r") as f2:
+                for line in f2:
+                    relative_path = line.split()[0]
+                    str_f = os.path.basename(relative_path)
+                    str_d = os.path.dirname(relative_path)
+                    flowID = get_row_in_matrix(run2+':'+relative_path+':'+src_node+':'+dest_node)
+                    matrix[flowID][0] = flowID
+
+                    if matrix[flowID][Field.TIME_START] == 0 :
+                        matrix[flowID][Field.FILENAME] = str_f
+                        matrix[flowID][Field.PATH] = str_d
+                        matrix[flowID][Field.SRCNODE] = src_node
+                        matrix[flowID][Field.DESTNODE] = dest_node
+                        matrix[flowID][Field.MISSING] = 1
+                        miss_count += 1
+            print ('Parsed wget {}, total {} records, missing {} records'.format(matched_file, filenumber, miss_count))
 
     # parse diff files from dest nodes
     for matched_file in fnmatch.filter(os.listdir(result_dir), '*diff*'):
@@ -140,6 +167,9 @@ def parse_logs():
                 diff_count = 0
                 miss_count = 0
                 for line in f:
+                    idx = filepath.find('run')
+                    run2 = filepath[idx:].split('_')[0]
+
                     if line.strip().startswith('Files'):
                         corrupted_filename = line.split()[3]
                         
@@ -161,7 +191,9 @@ def parse_logs():
                         matrix[flowID][Field.SRCNODE] = src_node
                         matrix[flowID][Field.DESTNODE] = dest_node
                         matrix[flowID][Field.FAILURE] = 1
+                        matrix[flowID][Field.FILE] = matched_file
                         diff_count += 1
+                    """
                     elif line.strip().startswith('Only in'):
                         templatedir = os.environ['TEMPLATE_DIR']
                         filename = line.split()[3]
@@ -169,13 +201,15 @@ def parse_logs():
                         idx = missing_filepath.find(templatedir)
                         dir_path = missing_filepath[idx+len(templatedir)+1:]
                         relative_path = dir_path+'/'+filename
-                        debug_print(filename)
-                        debug_print(dir_path)
+                        only_print(filename)
+                        only_print(dir_path)
+
                         if filename.startswith('index.html'):
                             debug_print('ignore ' + filename)
                             continue # do not add this file
 
-                        flowID = get_row_in_matrix(run+':'+relative_path+':'+src_node+':'+dest_node)
+                        flowID = get_row_in_matrix(run2+':'+relative_path+':'+src_node+':'+dest_node)
+                        only_print('MISSING in {}, {}/{}/{} '.format(filepath, run2, dir_path, filename))
                         matrix[flowID][0] = flowID
                         matrix[flowID][Field.FILENAME] = filename
                         matrix[flowID][Field.PATH] = dir_path
@@ -183,7 +217,8 @@ def parse_logs():
                         matrix[flowID][Field.DESTNODE] = dest_node
                         matrix[flowID][Field.MISSING] = 1
                         miss_count += 1
-                print ('Parsed diff file {}, {} difference/{} missing'.format(matched_file, diff_count, miss_count))
+                    """
+                print ('Parsed diff file {}, {} diffs'.format(matched_file, diff_count))
 
     # parse cj_log files from source nodes
     for matched_file in fnmatch.filter(os.listdir(result_dir), '*_cj.log'):
@@ -226,7 +261,7 @@ def parse_logs():
                         debug_print(key)
                         if key.startswith(run):
                             flowID = flowIDTable[key]
-                            matrix[flowID][Field.LABEL] = label.split('_')[1]
+                            matrix[flowID][Field.LABEL] = label #label.split('_')[1]
                 print('----------------------------')
 
     for matched_file in fnmatch.filter(os.listdir(result_dir), '*node_router*'):
@@ -256,7 +291,8 @@ def parse_logs():
         headers.append(field.name)
         #print(field)
 
-    filepath = os.path.join(result_dir, 'matrix.csv')
+    output_filename = os.path.basename(result_dir) + '.csv'
+    filepath = os.path.join(result_dir, output_filename)
     with open(filepath, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=',',
                                 quotechar='|', quoting=csv.QUOTE_NONE)

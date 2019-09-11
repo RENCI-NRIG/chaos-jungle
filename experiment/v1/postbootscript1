@@ -1,0 +1,14 @@
+#set ( $hostname = $self.Name() )
+echo $hostname:$gw &gt; /root/tmp_gw
+
+#foreach ( $link2 in $linkset )
+  #set ( $IP=$self.IP($link2) )
+  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
+#end
+
+
+
+        
+        
+        
+        

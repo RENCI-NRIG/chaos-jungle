@@ -45,14 +45,6 @@ echo $link &gt; /root/tmp
 #set ( $gw = $CENIC.IP($link) )
 echo $gw &gt; /root/tmp
 
-#set ( $hostname = $self.Name() )
-echo $hostname:$gw &gt; /root/tmp_gw
-#foreach ( $link2 in $linkset )
-  #set ( $IP=$self.IP($link2) )
-  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
-#end
-
-
 while ! ping -c 1 -n -w 1 $gw &amp;&gt; /dev/null
 do
     echo "ping gw...." &gt;&gt; /root/tmp
@@ -62,7 +54,44 @@ echo "\n%s\n"  "Server is back online" &gt;&gt; /root/tmp
 
 ip route add 10.100.0.0/16 via $gw dev ens6
 ip route add 172.16.0.0/16 via $gw dev ens6
-ip route add 192.168.0.0/16 via $gw dev ens6</request-schema:postBootScript>
+ip route add 192.168.0.0/16 via $gw dev ens6
+
+#set ( $hostname = $self.Name() )
+echo $hostname:$gw &gt; /root/tmp_gw
+#foreach ( $link2 in $linkset )
+  #set ( $IP=$self.IP($link2) )
+  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
+#end
+
+echo "Installing CJ and apache2" &gt;&gt; /root/tmp
+cd /root
+git clone --branch storage https://github.com/RENCI-NRIG/chaos-jungle.git
+date &gt;&gt; /root/tmp
+until apt-get -y install apache2
+do
+        echo "installing apache2" &gt;&gt; /root/tmp
+        sleep 2
+done
+date &gt;&gt; /root/tmp
+mkdir -p /root/iris
+cp -r /root/chaos-jungle/experiment/testdata /root/iris
+cp chaos-jungle/experiment/v1/000-default.conf /etc/apache2/sites-available
+mkdir -p /var/www/iris
+service apache2 reload
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4052245BD4284CDD
+echo "deb https://repo.iovisor.org/apt/$(lsb_release -cs) $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/iovisor.list
+apt-get -y update
+apt-get -y install bcc-tools libbcc-examples linux-headers-$(uname -r)
+apt-get -y install python3-bcc
+apt-get -y install python3-pyroute2 python-pyroute2 iperf3
+apt install -y python3-pip python3-setuptools
+pip3 install python-crontab  
+date &gt;&gt; /root/tmp
+python3 /root/chaos-jungle/storage/cj_storage.py --revert &gt;&gt; /root/tmp
+echo "done" &gt;&gt; /root/tmp
+
+
+</request-schema:postBootScript>
     <compute:diskImage rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Ubuntu+18.04+QCOW2+v1.0.2"/>
     <compute:specificCE rdf:resource="http://geni-orca.renci.org/owl/exogeni.owl#XOLarge"/>
     <domain:hasResourceType rdf:resource="http://geni-orca.renci.org/owl/compute.owl#VM"/>
@@ -89,14 +118,6 @@ echo $link &gt; /root/tmp
 #set ( $gw = $I2.IP($link) )
 echo $gw &gt; /root/tmp
 
-#set ( $hostname = $self.Name() )
-echo $hostname:$gw &gt; /root/tmp_gw
-#foreach ( $link2 in $linkset )
-  #set ( $IP=$self.IP($link2) )
-  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
-#end
-
-
 while ! ping -c 1 -n -w 1 $gw &amp;&gt; /dev/null
 do
     echo "ping gw...." &gt;&gt; /root/tmp
@@ -106,15 +127,51 @@ echo "\n%s\n"  "Server is back online" &gt;&gt; /root/tmp
 
 ip route add 10.100.0.0/16 via $gw dev ens6
 ip route add 172.16.0.0/16 via $gw dev ens6
-ip route add 192.168.0.0/16 via $gw dev ens6</request-schema:postBootScript>
+ip route add 192.168.0.0/16 via $gw dev ens6
+
+#set ( $hostname = $self.Name() )
+echo $hostname:$gw &gt; /root/tmp_gw
+#foreach ( $link2 in $linkset )
+  #set ( $IP=$self.IP($link2) )
+  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
+#end
+
+echo "Installing CJ and apache2" &gt;&gt; /root/tmp
+cd /root
+git clone --branch storage https://github.com/RENCI-NRIG/chaos-jungle.git
+date &gt;&gt; /root/tmp
+until apt-get -y install apache2
+do
+        echo "installing apache2" &gt;&gt; /root/tmp
+        sleep 2
+done
+date &gt;&gt; /root/tmp
+mkdir -p /root/iris
+cp -r /root/chaos-jungle/experiment/testdata /root/iris
+cp chaos-jungle/experiment/v1/000-default.conf /etc/apache2/sites-available
+mkdir -p /var/www/iris
+service apache2 reload
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4052245BD4284CDD
+echo "deb https://repo.iovisor.org/apt/$(lsb_release -cs) $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/iovisor.list
+apt-get -y update
+apt-get -y install bcc-tools libbcc-examples linux-headers-$(uname -r)
+apt-get -y install python3-bcc
+apt-get -y install python3-pyroute2 python-pyroute2 iperf3
+apt install -y python3-pip python3-setuptools
+pip3 install python-crontab  
+date &gt;&gt; /root/tmp
+python3 /root/chaos-jungle/storage/cj_storage.py --revert &gt;&gt; /root/tmp
+echo "done" &gt;&gt; /root/tmp
+
+</request-schema:postBootScript>
     <compute:diskImage rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Ubuntu+18.04+QCOW2+v1.0.2"/>
     <compute:specificCE rdf:resource="http://geni-orca.renci.org/owl/exogeni.owl#XOLarge"/>
     <domain:hasResourceType rdf:resource="http://geni-orca.renci.org/owl/compute.owl#VM"/>
     <rdf:type rdf:resource="http://geni-orca.renci.org/owl/compute.owl#ComputeElement"/>
   </rdf:Description>
   <rdf:Description rdf:about="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#CENIC">
-    <topology:hasInterface rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Link1-CENIC"/>
     <topology:hasInterface rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Link5-CENIC"/>
+    <topology:hasInterface rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Link1-CENIC"/>
     <topology:hasInterface rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Link0-CENIC"/>
     <topology:hasGUID>f458477e-42a1-43fe-a84b-5b7e084b85a8</topology:hasGUID>
     <request-schema:postBootScript rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#!/bin/bash
@@ -154,11 +211,6 @@ echo 'export VTYSH_PAGER=more' &gt;&gt;/etc/bash.bashrc
 echo $linkset &gt;&gt; /root/tmp
 echo $linksetstr &gt;&gt; /root/tmp
 
-#foreach ( $link2 in $linkset )
-  #set ( $IP=$self.IP($link2) )
-  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
-#end
-
 #wait for interfaces
 echo $numIntf &gt;&gt; /root/tmp
 size=0
@@ -228,7 +280,42 @@ echo ip forwarding &gt;&gt; /etc/quagga/zebra.conf
 systemctl enable zebra
 systemctl start zebra
 systemctl enable ospfd
-systemctl start ospfd</request-schema:postBootScript>
+systemctl start ospfd
+
+#foreach ( $link2 in $linkset )
+  #set ( $IP=$self.IP($link2) )
+  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
+#end
+
+echo "Installing CJ and apache2" &gt;&gt; /root/tmp
+cd /root
+git clone --branch storage https://github.com/RENCI-NRIG/chaos-jungle.git
+date &gt;&gt; /root/tmp
+until apt-get -y install apache2
+do
+        echo "installing apache2" &gt;&gt; /root/tmp
+        sleep 2
+done
+date &gt;&gt; /root/tmp
+mkdir -p /root/iris
+cp -r /root/chaos-jungle/experiment/testdata /root/iris
+cp chaos-jungle/experiment/v1/000-default.conf /etc/apache2/sites-available
+mkdir -p /var/www/iris
+service apache2 reload
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4052245BD4284CDD
+echo "deb https://repo.iovisor.org/apt/$(lsb_release -cs) $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/iovisor.list
+apt-get -y update
+apt-get -y install bcc-tools libbcc-examples linux-headers-$(uname -r)
+apt-get -y install python3-bcc
+apt-get -y install python3-pyroute2 python-pyroute2 iperf3
+apt install -y python3-pip python3-setuptools
+pip3 install python-crontab  
+date &gt;&gt; /root/tmp
+python3 /root/chaos-jungle/storage/cj_storage.py --revert &gt;&gt; /root/tmp
+echo "done" &gt;&gt; /root/tmp
+
+
+</request-schema:postBootScript>
     <compute:diskImage rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Ubuntu+18.04+QCOW2+v1.0.2"/>
     <compute:specificCE rdf:resource="http://geni-orca.renci.org/owl/exogeni.owl#XOLarge"/>
     <domain:hasResourceType rdf:resource="http://geni-orca.renci.org/owl/compute.owl#VM"/>
@@ -266,9 +353,9 @@ systemctl start ospfd</request-schema:postBootScript>
     <rdf:type rdf:resource="http://geni-orca.renci.org/owl/topology.owl#NetworkConnection"/>
   </rdf:Description>
   <rdf:Description rdf:about="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#ESNET">
-    <topology:hasInterface rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Link4-ESNET"/>
     <topology:hasInterface rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Link1-ESNET"/>
     <topology:hasInterface rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Link2-ESNET"/>
+    <topology:hasInterface rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Link4-ESNET"/>
     <topology:hasGUID>32eb38f5-294b-4599-8de2-69a485881f7c</topology:hasGUID>
     <request-schema:postBootScript rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#!/bin/bash
 
@@ -305,11 +392,6 @@ echo 'export VTYSH_PAGER=more' &gt;&gt;/etc/bash.bashrc
 
 echo $linkset &gt;&gt; /root/tmp
 echo $linksetstr &gt;&gt; /root/tmp
-
-#foreach ( $link2 in $linkset )
-  #set ( $IP=$self.IP($link2) )
-  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
-#end
 
 #wait for interfaces
 echo $numIntf &gt;&gt; /root/tmp
@@ -380,7 +462,41 @@ echo ip forwarding &gt;&gt; /etc/quagga/zebra.conf
 systemctl enable zebra
 systemctl start zebra
 systemctl enable ospfd
-systemctl start ospfd</request-schema:postBootScript>
+systemctl start ospfd
+
+#foreach ( $link2 in $linkset )
+  #set ( $IP=$self.IP($link2) )
+  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
+#end
+
+echo "Installing CJ and apache2" &gt;&gt; /root/tmp
+cd /root
+git clone --branch storage https://github.com/RENCI-NRIG/chaos-jungle.git
+date &gt;&gt; /root/tmp
+until apt-get -y install apache2
+do
+        echo "installing apache2" &gt;&gt; /root/tmp
+        sleep 2
+done
+date &gt;&gt; /root/tmp
+mkdir -p /root/iris
+cp -r /root/chaos-jungle/experiment/testdata /root/iris
+cp chaos-jungle/experiment/v1/000-default.conf /etc/apache2/sites-available
+mkdir -p /var/www/iris
+service apache2 reload
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4052245BD4284CDD
+echo "deb https://repo.iovisor.org/apt/$(lsb_release -cs) $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/iovisor.list
+apt-get -y update
+apt-get -y install bcc-tools libbcc-examples linux-headers-$(uname -r)
+apt-get -y install python3-bcc
+apt-get -y install python3-pyroute2 python-pyroute2 iperf3
+apt install -y python3-pip python3-setuptools
+pip3 install python-crontab  
+date &gt;&gt; /root/tmp
+python3 /root/chaos-jungle/storage/cj_storage.py --revert &gt;&gt; /root/tmp
+echo "done" &gt;&gt; /root/tmp
+
+</request-schema:postBootScript>
     <compute:diskImage rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Ubuntu+18.04+QCOW2+v1.0.2"/>
     <compute:specificCE rdf:resource="http://geni-orca.renci.org/owl/exogeni.owl#XOLarge"/>
     <domain:hasResourceType rdf:resource="http://geni-orca.renci.org/owl/compute.owl#VM"/>
@@ -489,13 +605,6 @@ echo $link &gt; /root/tmp
 #set ( $gw = $ESNET.IP($link) )
 echo $gw &gt; /root/tmp
 
-#set ( $hostname = $self.Name() )
-echo $hostname:$gw &gt; /root/tmp_gw
-#foreach ( $link2 in $linkset )
-  #set ( $IP=$self.IP($link2) )
-  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
-#end
-
 while ! ping -c 1 -n -w 1 $gw &amp;&gt; /dev/null
 do
     echo "ping gw...." &gt;&gt; /root/tmp
@@ -505,7 +614,43 @@ echo "\n%s\n"  "Server is back online" &gt;&gt; /root/tmp
 
 ip route add 10.100.0.0/16 via $gw dev ens6
 ip route add 172.16.0.0/16 via $gw dev ens6
-ip route add 192.168.0.0/16 via $gw dev ens6</request-schema:postBootScript>
+ip route add 192.168.0.0/16 via $gw dev ens6
+
+#set ( $hostname = $self.Name() )
+echo $hostname:$gw &gt; /root/tmp_gw
+#foreach ( $link2 in $linkset )
+  #set ( $IP=$self.IP($link2) )
+  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
+#end
+
+echo "Installing CJ and apache2" &gt;&gt; /root/tmp
+cd /root
+git clone --branch storage https://github.com/RENCI-NRIG/chaos-jungle.git
+date &gt;&gt; /root/tmp
+until apt-get -y install apache2
+do
+        echo "installing apache2" &gt;&gt; /root/tmp
+        sleep 2
+done
+date &gt;&gt; /root/tmp
+mkdir -p /root/iris
+cp -r /root/chaos-jungle/experiment/testdata /root/iris
+cp chaos-jungle/experiment/v1/000-default.conf /etc/apache2/sites-available
+mkdir -p /var/www/iris
+service apache2 reload
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4052245BD4284CDD
+echo "deb https://repo.iovisor.org/apt/$(lsb_release -cs) $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/iovisor.list
+apt-get -y update
+apt-get -y install bcc-tools libbcc-examples linux-headers-$(uname -r)
+apt-get -y install python3-bcc
+apt-get -y install python3-pyroute2 python-pyroute2 iperf3
+apt install -y python3-pip python3-setuptools
+pip3 install python-crontab  
+date &gt;&gt; /root/tmp
+python3 /root/chaos-jungle/storage/cj_storage.py --revert &gt;&gt; /root/tmp
+echo "done" &gt;&gt; /root/tmp
+
+</request-schema:postBootScript>
     <compute:diskImage rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Ubuntu+18.04+QCOW2+v1.0.2"/>
     <compute:specificCE rdf:resource="http://geni-orca.renci.org/owl/exogeni.owl#XOLarge"/>
     <domain:hasResourceType rdf:resource="http://geni-orca.renci.org/owl/compute.owl#VM"/>
@@ -561,11 +706,6 @@ echo 'export VTYSH_PAGER=more' &gt;&gt;/etc/bash.bashrc
 
 echo $linkset &gt;&gt; /root/tmp
 echo $linksetstr &gt;&gt; /root/tmp
-
-#foreach ( $link2 in $linkset )
-  #set ( $IP=$self.IP($link2) )
-  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
-#end
 
 #wait for interfaces
 echo $numIntf &gt;&gt; /root/tmp
@@ -636,7 +776,41 @@ echo ip forwarding &gt;&gt; /etc/quagga/zebra.conf
 systemctl enable zebra
 systemctl start zebra
 systemctl enable ospfd
-systemctl start ospfd</request-schema:postBootScript>
+systemctl start ospfd
+
+#foreach ( $link2 in $linkset )
+  #set ( $IP=$self.IP($link2) )
+  echo export $self.Name()_$link2="$IP" &gt;&gt; /root/tmp_links.sh
+#end
+
+echo "Installing CJ and apache2" &gt;&gt; /root/tmp
+cd /root
+git clone --branch storage https://github.com/RENCI-NRIG/chaos-jungle.git
+date &gt;&gt; /root/tmp
+until apt-get -y install apache2
+do
+        echo "installing apache2" &gt;&gt; /root/tmp
+        sleep 2
+done
+date &gt;&gt; /root/tmp
+mkdir -p /root/iris
+cp -r /root/chaos-jungle/experiment/testdata /root/iris
+cp chaos-jungle/experiment/v1/000-default.conf /etc/apache2/sites-available
+mkdir -p /var/www/iris
+service apache2 reload
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4052245BD4284CDD
+echo "deb https://repo.iovisor.org/apt/$(lsb_release -cs) $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/iovisor.list
+apt-get -y update
+apt-get -y install bcc-tools libbcc-examples linux-headers-$(uname -r)
+apt-get -y install python3-bcc
+apt-get -y install python3-pyroute2 python-pyroute2 iperf3
+apt install -y python3-pip python3-setuptools
+pip3 install python-crontab  
+date &gt;&gt; /root/tmp
+python3 /root/chaos-jungle/storage/cj_storage.py --revert &gt;&gt; /root/tmp
+echo "done" &gt;&gt; /root/tmp
+
+</request-schema:postBootScript>
     <compute:diskImage rdf:resource="http://geni-orca.renci.org/owl/f56ffbe5-3bbf-4ea9-a6b4-a4ff69939155#Ubuntu+18.04+QCOW2+v1.0.2"/>
     <compute:specificCE rdf:resource="http://geni-orca.renci.org/owl/exogeni.owl#XOLarge"/>
     <domain:hasResourceType rdf:resource="http://geni-orca.renci.org/owl/compute.owl#VM"/>
