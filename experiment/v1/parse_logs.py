@@ -8,10 +8,11 @@ import subprocess
 
 matrix = [] # output of parsing 
 flowIDTable = {} # dictionary: key = (run+':'+relative_path+':'+src_node+':'+dest_node), value = flowID
+csvfilepath = ''
+result_dir = ''
 
 class Field(IntEnum):
-    FLOWID = 0
-    FILENAME = 1
+    FILENAME = 0
     PATH = auto()
     SRCNODE = auto()
     DESTNODE = auto()
@@ -26,17 +27,14 @@ class Field(IntEnum):
     DEST_S = auto()
     LABEL = auto()
     RUN = auto()
-    FILE = auto()
+    #FLOWID = auto()
+    #KEY = auto()
     # following not filled yet
     #ORIGIN = auto()
     #OSGSITE = auto()
 
 
 def debug_print(str):
-    #print(str)
-    return
-
-def only_print(str):
     #print(str)
     return
 
@@ -52,22 +50,26 @@ def get_row_in_matrix(key):
     if key in flowIDTable:
         debug_print('found key: ' + key)
         flowID = flowIDTable[key]
-        if matrix[flowID][0] != flowID:
-            debug_print('ERROR - flowID not matched')
+        #if matrix[flowID][Field.FLOWID] != flowID:
+        #    debug_print('ERROR - flowID not matched')
     else:
         flowID = len(flowIDTable)
         flowIDTable[key] = flowID
         add_new_row_in_matrix() 
         matrix[flowID][Field.RUN] = key.split(':')[0]
+        #matrix[flowID][Field.FLOWID] = flowID
+        #matrix[flowID][Field.KEY] = key
     return flowID
 
 
-def parse_logs():
-    result_dir = sys.argv[1]; #result_dir = os.environ['RESULT_DIR']
+def parse_logs(single_run):
+    global matrix, flowIDTable, csvfilepath, result_dir
+    matrix = []
+    flowIDTable = {}
     iris_dir = os.environ['IRIS_DIR']
 
     # parse wget files from dest nodes
-    for matched_file in fnmatch.filter(os.listdir(result_dir), '*wget*'):
+    for matched_file in fnmatch.filter(os.listdir(result_dir), '*{}_wget*'.format(single_run)):
         filepath = os.path.join(result_dir, matched_file)
         if os.path.isfile(filepath):
             filenumber = 0
@@ -121,7 +123,7 @@ def parse_logs():
                         debug_print(retry_count)
 
                         flowID = get_row_in_matrix(run+':'+relative_path+':'+src_node+':'+dest_node)
-                        matrix[flowID][0] = flowID
+                        
                         matrix[flowID][Field.FILENAME] = filename
                         matrix[flowID][Field.PATH] = dir_path
                         matrix[flowID][Field.SRCNODE] = src_node
@@ -131,7 +133,7 @@ def parse_logs():
                         matrix[flowID][Field.FILESIZE] = filesize
                         matrix[flowID][Field.THROUGHPUT] = throughput
                         matrix[flowID][Field.RETRIES] = retry_count
-                        matrix[flowID][Field.FILE] = matched_file
+                        #matrix[flowID][Field.FILE] = matched_file
                         retry_count = 0
 
             # following checks whether there are missing files which are not in wget result
@@ -143,7 +145,6 @@ def parse_logs():
                     str_f = os.path.basename(relative_path)
                     str_d = os.path.dirname(relative_path)
                     flowID = get_row_in_matrix(run2+':'+relative_path+':'+src_node+':'+dest_node)
-                    matrix[flowID][0] = flowID
 
                     if matrix[flowID][Field.TIME_START] == 0 :
                         matrix[flowID][Field.FILENAME] = str_f
@@ -155,7 +156,7 @@ def parse_logs():
             print ('Parsed wget {}, total {} records, missing {} records'.format(matched_file, filenumber, miss_count))
 
     # parse diff files from dest nodes
-    for matched_file in fnmatch.filter(os.listdir(result_dir), '*diff*'):
+    for matched_file in fnmatch.filter(os.listdir(result_dir), '*{}_diff*'.format(single_run)):
         filepath = os.path.join(result_dir, matched_file)
         if os.path.isfile(filepath):
             with open(filepath, "r") as f:
@@ -185,43 +186,17 @@ def parse_logs():
                         dir_path = os.path.dirname(relative_path)
 
                         flowID = get_row_in_matrix(run+':'+relative_path+':'+src_node+':'+dest_node)
-                        matrix[flowID][0] = flowID
                         matrix[flowID][Field.FILENAME] = filename
                         matrix[flowID][Field.PATH] = dir_path
                         matrix[flowID][Field.SRCNODE] = src_node
                         matrix[flowID][Field.DESTNODE] = dest_node
                         matrix[flowID][Field.FAILURE] = 1
-                        matrix[flowID][Field.FILE] = matched_file
+                        #matrix[flowID][Field.FILE] = matched_file
                         diff_count += 1
-                    """
-                    elif line.strip().startswith('Only in'):
-                        templatedir = os.environ['TEMPLATE_DIR']
-                        filename = line.split()[3]
-                        missing_filepath= line.split()[2].split(':')[0]
-                        idx = missing_filepath.find(templatedir)
-                        dir_path = missing_filepath[idx+len(templatedir)+1:]
-                        relative_path = dir_path+'/'+filename
-                        only_print(filename)
-                        only_print(dir_path)
-
-                        if filename.startswith('index.html'):
-                            debug_print('ignore ' + filename)
-                            continue # do not add this file
-
-                        flowID = get_row_in_matrix(run2+':'+relative_path+':'+src_node+':'+dest_node)
-                        only_print('MISSING in {}, {}/{}/{} '.format(filepath, run2, dir_path, filename))
-                        matrix[flowID][0] = flowID
-                        matrix[flowID][Field.FILENAME] = filename
-                        matrix[flowID][Field.PATH] = dir_path
-                        matrix[flowID][Field.SRCNODE] = src_node
-                        matrix[flowID][Field.DESTNODE] = dest_node
-                        matrix[flowID][Field.MISSING] = 1
-                        miss_count += 1
-                    """
                 print ('Parsed diff file {}, {} diffs'.format(matched_file, diff_count))
 
     # parse cj_log files from source nodes
-    for matched_file in fnmatch.filter(os.listdir(result_dir), '*_cj.log'):
+    for matched_file in fnmatch.filter(os.listdir(result_dir), '*{}_cj.log'.format(single_run)):
         filepath = os.path.join(result_dir, matched_file)
         if os.path.isfile(filepath):
             with open(filepath, "r") as f:
@@ -242,7 +217,7 @@ def parse_logs():
                                 matrix[flowID][Field.LABEL] = src_node
                 print ('Parsed file {}, {} corruptions'.format(matched_file, corrupt_count))
                 print('----------------------------')
-                print('<RUNs>\t<NODE_STORAGE_CORRUPT/COUNT>')
+                print('<RUN>\t<NODE_STORAGE_CORRUPT/COUNT>')
                 print('{}\t{}\t{}'.format(run, src_node, corrupt_count))
                 print('----------------------------')
 
@@ -251,27 +226,27 @@ def parse_logs():
         filepath = os.path.join(result_dir, matched_file)
         if os.path.isfile(filepath):
             with open(filepath, "r") as f:
-                print('----------------------------')
-                print('<RUNs>\t<LINK_CORRUPTED>')
                 for line in f:
                     (run, label) = line.split()
-                    
-                    print('{}\t{}'.format(run, label))
-                    for key in flowIDTable.keys():
-                        debug_print(key)
-                        if key.startswith(run):
-                            flowID = flowIDTable[key]
-                            matrix[flowID][Field.LABEL] = label #label.split('_')[1]
-                print('----------------------------')
+                    if run == single_run:
+                        print('----------------------------')
+                        print('<RUN>\t<LINK_CORRUPTED>')
+                        print('{}\t{}'.format(run, label))
+                        print('----------------------------')
+                        for key in flowIDTable.keys():
+                            debug_print(key)
+                            if key.startswith(run):
+                                flowID = flowIDTable[key]
+                                matrix[flowID][Field.LABEL] = label #label.split('_')[1]
 
     for matched_file in fnmatch.filter(os.listdir(result_dir), '*node_router*'):
         filepath = os.path.join(result_dir, matched_file)
         if os.path.isfile(filepath):
             with open(filepath, "r") as f:
-                print('<NODEs>\t<ROUTERs>')
+                debug_print('<NODEs>\t<ROUTERs>')
                 for line in f:
                     (node, router) = line.split()
-                    print('{}\t{}'.format(node, router))
+                    debug_print('{}\t{}'.format(node, router))
                     for key in flowIDTable.keys():
                         if key.find(node) > 0:
                             flowID = flowIDTable[key]
@@ -282,29 +257,42 @@ def parse_logs():
                             else:
                                 print('ERROR flowID = {}, {}'.format(flowID, key))
 
-    #print('iris_dir = ' + iris_dir)
-    #print('result_dir = ' + result_dir)
-    #print(flowIDTable)
+    with open(csvfilepath, 'a', newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',',
+                                quotechar='|', quoting=csv.QUOTE_NONE)
+        for i in range(len(matrix)):
+            writer.writerow(matrix[i])
+    
 
+def main():
+    global csvfilepath, result_dir
+    result_dir = sys.argv[1]
+    if result_dir[len(result_dir)-1] == '/':
+        result_dir = result_dir[:len(result_dir)-1]
+    output_filename = os.path.basename(result_dir) + '.csv'
+    print( 'output csv: ' + output_filename)
+    csvfilepath = os.path.join(result_dir, output_filename)
     headers = []
     for field in Field:
         headers.append(field.name)
-        #print(field)
-
-    output_filename = os.path.basename(result_dir) + '.csv'
-    filepath = os.path.join(result_dir, output_filename)
-    with open(filepath, 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile, delimiter=',',
-                                quotechar='|', quoting=csv.QUOTE_NONE)
+    with open(csvfilepath, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_NONE)    
         writer.writerow(headers)
-        for i in range(len(matrix)):
-            writer.writerow(matrix[i])
 
-    return matrix
+    filepath = os.path.join(result_dir, os.environ['RUN_LINKLABEL_FILE'])
+    if os.path.isfile(filepath):
+        with open(filepath, "r") as f:               
+            for line in f:
+                (run, label) = line.split()
+    run_number = int(run[3:])
+    print('total runs = {}'.format(run_number))
 
+    for x in range(run_number):
+        single_run = 'run{}'.format(x+1)
+        print('parsing ' + single_run + '...')
+        parse_logs(single_run)
 
-def main():
-    parse_logs()
+    print( 'output csv: ' + output_filename + '\n')
 
 if __name__ == "__main__":
     main()
