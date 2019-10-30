@@ -60,7 +60,7 @@ _get_corrupt_edges () {
     do
         edge=$(cut -d' ' -f2 <<< $line | cut -d= -f1)
         CORRUPT_EDGES=${CORRUPT_EDGES}' '${edge}
-        echo CORRUPT_EDGES ${CORRUPT_EDGES}
+        #echo CORRUPT_EDGES ${CORRUPT_EDGES}
     done < ${CORRUPT_EDGES_FILE}
 }
 

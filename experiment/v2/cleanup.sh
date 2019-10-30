@@ -14,5 +14,5 @@ for nodeip in $END_NODES; do
     ssh $SSH_OPTION $SSH_DEST sudo cp -r /root/chaos-jungle/experiment/testdata $IRIS_DIR
     ssh $SSH_OPTION $SSH_DEST sudo rm -rf $SITE_DIR
     ssh $SSH_OPTION $SSH_DEST sudo mkdir -p $SITE_DIR
-    ssh $SSH_OPTION $SSH_DEST sudo rm -rf ${IRIS_DIR}/*.*.*.*
+    #ssh $SSH_OPTION $SSH_DEST sudo rm -rf ${IRIS_DIR}/*.*.*.*
 done

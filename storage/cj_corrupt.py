@@ -184,8 +184,15 @@ class Corruptor:
         self.logger.info('record: filename {}, record_disk {}, target_block {}, nth_byte {}, orig_value {}, modified_value {}'\
                         .format(filename, record_disk, target_block, nth_byte, hex(orig_value), hex(modified_value)))
         # check if the mtime is still not same as last time
-        if record_mtime != os.path.getmtime(filename):
-            self.logger.info('mtime not match! exiting...')
+        self.db.delete_record_of_file(filename)
+
+        if os.path.isfile(filename):
+            if record_mtime != os.path.getmtime(filename):
+                self.logger.info('mtime not match! exiting...')
+                return -1
+        else:
+            self.logger.info('{} file does not exist'.format(filename))
+            return -1
         
         self.logger.debug('target_block is {}'.format(target_block))
         if target_block == 0:
@@ -223,7 +230,6 @@ class Corruptor:
         self.logger.info('\'{}\' reverted'.format(filename))
         self.logger.info('target_block = {}, nth_byte = {}, before/after: {}/{}'.format(target_block, nth_byte, hex(ord(target_value)), hex(orig_value)))
 
-        self.db.delete_record_of_file(filename)
         return self.dd_drop_cache(filename)
 
 
@@ -292,8 +298,10 @@ class Corruptor:
         """ Corrupt the file
         """
         if random.random() >= g_probability:
-            self.logger.info('probability = {} , not corrupting {} this time'.format(g_probability, filename))
+            self.logger.info('probability = {} , not corrupting this time'.format(g_probability))
             return -1
+        else:
+            self.logger.info('probability = {} , corrupting {}'.format(g_probability, filename))
 
         if not os.path.isfile(filename) or os.path.getsize(filename) == 0:
             self.logger.warning('{}, file not existed or size = 0'.format(filename))
@@ -342,7 +350,7 @@ class Corruptor:
         else:
             self.logger.info('files count = {}'.format(len(files)))
             victim_file = random.choice(files)
-            self.logger.info('pick a victim: {}'.format(victim_file))
+            #self.logger.info('pick a victim: {}'.format(victim_file))
             return self.corrupt_file(os.path.abspath(victim_file))
         return 0
 
@@ -372,7 +380,7 @@ def run_corrupt(args):
     global g_probability, g_corrupt_byte_index
     g_probability = 1
     g_corrupt_byte_index = 0
-    if args.probability and args.probability > 0 and args.probability < 1:
+    if args.probability != None and args.probability >= 0 and args.probability < 1:
         g_probability = args.probability
         cj.logger.info('probability = {}'.format(g_probability))
     if args.index:
