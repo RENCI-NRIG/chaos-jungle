@@ -6,7 +6,7 @@ Before starting experiments, configuration needs to be modified first.
 #### Download the Chaos Jungle experiment scripts
 ```
 $ git clone --branch storage https://github.com/RENCI-NRIG/chaos-jungle.git
-$ cd chaos-jungle/experiment/v1 
+$ cd chaos-jungle/experiment/v2 
 ```
 
 #### Modify following configurations in `test_env.sh`
@@ -20,6 +20,7 @@ export OUTPUT_DIR=../results
 ```
 
 ### [Start Experiment]
+####Copy the private key to ~/.ssh if you have the controller node in the slice
 
 #### 1. Now setup the nodes by `init_experiment.sh` which will install CJ and apache2, as well as getting the nodes information (IP addresses, Links...) to control machine
 ```
@@ -34,7 +35,7 @@ $ ./init_experiment.sh
 ```
 141.217.114.192 Node5      # prob default is 1, 1 file will be corrupted
 141.217.114.138 Node3 0.8  # prob is set to 0.8, there is 0.8 chance a file will be corrupted.
-141.217.114.173 Node4 0.5  # prob is set to 0.8, there is 0.5 chance a file will be corrupted.
+141.217.114.173 Node4 0.5  # prob is set to 0.5, there is 0.5 chance a file will be corrupted.
 ```
 
 &nbsp;&nbsp;&nbsp;&nbsp;in `CORRUPT_EDGES` file:
@@ -52,8 +53,9 @@ export CENIC_Link5=172.16.5.2 0.005  # every 5 of 1000 packets is corrupted
 <br />
 
 #### 2. Then you can start the experiment by `start_experiement.sh`, a result folder will be created under `OUTPUT_DIR`. The log files and result `matrix.csv` will be inside the folder.
+###$nohup ../run_experiment.sh 
 ```
-$ ./run_experiement.sh
+$ ./run_experiment.sh
 ```
 
 
