@@ -30,6 +30,9 @@ _get_src_nodes () {
     SRC_NODES=""
     while IFS= read line || [ -n "$line" ]
     do
+        if [[ $line = \#* ]] ; then
+          continue;
+        fi
         nodeip=$(echo $line | awk '{print $1;}'); #echo $nodeip
         SRC_NODES=${SRC_NODES}' '${nodeip}
     done < ${SRC_NODES_FILE}
@@ -39,6 +42,9 @@ _get_dest_nodes () {
     DEST_NODES=""
     while IFS= read line || [ -n "$line" ]
     do
+        if [[ $line = \#* ]] ; then
+          continue;
+        fi
         nodeip=$(echo $line | awk '{print $1;}'); #echo $nodeip
         DEST_NODES=${DEST_NODES}' '${nodeip}
     done < ${DEST_NODES_FILE}
@@ -48,6 +54,9 @@ _get_corrupt_nodes () {
     CORRUPT_NODES=""
     while IFS= read line || [ -n "$line" ]
     do
+        if [[ $line = \#* ]] ; then
+          continue;
+        fi
         nodeip=$(echo $line | awk '{print $1;}'); #echo $nodeip
         CORRUPT_NODES=${CORRUPT_NODES}' '${nodeip}
     done < ${CORRUPT_NODES_FILE}
@@ -66,6 +75,9 @@ _get_corrupt_edges () {
     CORRUPT_EDGES=""
     while IFS= read line || [ -n "$line" ]
     do
+        if [[ $line = \#* ]] ; then
+          continue;
+        fi
         edge=$(cut -d' ' -f2 <<< $line | cut -d= -f1)
         CORRUPT_EDGES=${CORRUPT_EDGES}' '${edge}
         #echo CORRUPT_EDGES ${CORRUPT_EDGES}
