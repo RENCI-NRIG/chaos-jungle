@@ -9,6 +9,8 @@ rm -rf $OUTPUT_DIR; mkdir -p $OUTPUT_DIR
 ssh $SSH_OPTION root@$ANY_NODE_IP "cd ${TEMPLATE_DIR}/.. && find $(basename ${TEMPLATE_DIR}) -type f" > ${OUTPUT_DIR}/allfiles
 scp $SSH_OPTION root@$ANY_NODE_IP:/etc/hosts $OUTPUT_DIR
 
+grep -v $(hostname) ${OUTPUT_DIR}/hosts > ${OUTPUT_DIR}/hosts2
+
 #sed "s/127.255.255.1/${ANY_NODE_IP}/g" "${OUTPUT_DIR}/hosts"                  #this work on linux
 #sed -i "" "/$ANY_NODE/ s/.*/$ANY_NODE_IP    $ANY_NODE/g" "${OUTPUT_DIR}/hosts" #this work on mac
 echo -e ${ANY_NODE_IP} ${ANY_NODE} > $ALL_NODES_FILE
@@ -23,7 +25,7 @@ do
     if [ "$NeucaItems" == "y" ] && [ "$begin" != "###" ] && [ "$line" != "" ] && [ -z "${line##*'.'*}" ]; then
         echo $line >> $ALL_NODES_FILE
     fi
-done < "${OUTPUT_DIR}/hosts"
+done < "${OUTPUT_DIR}/hosts2"
 
 ## get the interfaces and gw information from all nodes
 while IFS= read -r line; do
