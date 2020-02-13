@@ -23,14 +23,14 @@ class Database:
 
     def connect(self, name):
         try:
-            self._conn = sqlite3.connect(name);
+            self._conn = sqlite3.connect(name)
             self._cursor = self._conn.cursor()
             return 0
         except sqlite3.Error as e:
             self._logger.debug(e)
             self._logger.info('connect {} fail'.format(name))
             return -1
-        
+
 
     def create_table(self):
         try:

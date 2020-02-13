@@ -4,7 +4,6 @@
 The Corruptor perform corruption for specific file or under specific folder
 
 """
-import argparse
 import os
 import sys
 import subprocess
@@ -18,16 +17,20 @@ from cj_database import Database
 
 CONFIG_FILE = 'cj.cfg'
 
-class Corruptor:
 
+class Corruptor:
+    """
+        The Corruptor class
+
+    """
     def __init__(self, quiet, log_dir):
 
         random.seed()
         user_log = os.path.join(log_dir, 'cj.log')          # corruption history log for user
         debug_log = os.path.join(log_dir, 'cj_debug.log')   # debug log
-        self._tmpfile = os.path.join(log_dir, 'cj.datablock')     # temporary file hold the corrupted block
+        self._tmpfile = os.path.join(log_dir, 'cj.datablock')  # tmp file hold the corrupted block
 
-        #setup logging
+        # setup logging
         formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
         handler1 = logging.FileHandler(debug_log)
         handler1.setFormatter(formatter)
@@ -45,7 +48,9 @@ class Corruptor:
         self.userlogger = logging.getLogger("CJuserlogger")
         self.userlogger.setLevel(logging.INFO)
         self.userlogger.addHandler(handler3)
-
+        self.db = Database(self.logger)
+        self.probability = 1
+        self.corrupt_byte_index = 0
 
     def get_file_info(self, filename):
         """ Return (disk, file extent information, error msg)
@@ -66,7 +71,8 @@ class Corruptor:
             return (None, None, "df cmd fail")
 
         lines = output.splitlines()
-        if len(lines) >= 2 and (lines[0].strip().startswith('Filesystem')): # we expect 2 lines with first line start with 'Filesystem'
+        # we expect at least 2 lines
+        if len(lines) >= 2 and (lines[0].strip().startswith('Filesystem')):
             (disk, fs_type, _) = lines[1].split(None, 2)
             self.logger.info('disk = {}, type = {}'.format(disk, fs_type))
         else:
@@ -86,10 +92,10 @@ class Corruptor:
         if ret != 0:
             return (None, None, "filefrag cmd fail")
 
-        EXTRA_LINES = 4                         # as example above, we only need 3rd line
+        n_extra_lines = 4                         # as example above, we only need 3rd line
         lines = output.splitlines()
-        extent_count = len(lines) - EXTRA_LINES
-        if extent_count <= 0 :
+        extent_count = len(lines) - n_extra_lines
+        if extent_count <= 0:
             return (None, None, "unexpected filefrag output")
 
         array_extent_info = []
@@ -105,17 +111,17 @@ class Corruptor:
             array_extent_info.insert(extent_number, [begin, end])
         return (disk, array_extent_info, "")
 
-
     def corrupt_bit(self, filename, disk, array_extent_info):
         """ This function issue dd linux command to corrupt the data in disk
-            Reference: https://www.gnu.org/software/coreutils/manual/html_node/dd-invocation.html#dd-invocation
+            Reference:
+            https://www.gnu.org/software/coreutils/manual/html_node/dd-invocation.html#dd-invocation
         """
 
         # pick a target block
-        if g_corrupt_byte_index >= os.path.getsize(filename) \
-            or g_corrupt_byte_index >= ((array_extent_info[0][1]-array_extent_info[0][0]+1)*4096):
+        if self.corrupt_byte_index >= os.path.getsize(filename) or \
+                self.corrupt_byte_index >= ((array_extent_info[0][1]-array_extent_info[0][0]+1) * 4096):
             return -1
-        target_block = int(g_corrupt_byte_index/4096)+ array_extent_info[0][0]
+        target_block = int(self.corrupt_byte_index / 4096) + array_extent_info[0][0]
 
         self.logger.debug(array_extent_info)
         self.logger.debug('target_block is {}'.format(target_block))
@@ -127,7 +133,7 @@ class Corruptor:
             return -1
 
         # we are corrupting the nth bit of nth byte in tmpfile
-        nth_byte, nth_bit = g_corrupt_byte_index%4096, 7
+        nth_byte, nth_bit = self.corrupt_byte_index % 4096, 7
         result = self.perform_bit_inversion(nth_byte, nth_bit)
         target_value, modified_value = result[0], result[1]
 
@@ -135,18 +141,21 @@ class Corruptor:
         if self.dd_write_data(filename, disk, target_block, 'CORRUPT_BIT') != 0:
             return -1
         self.logger.critical('Bit Inversion introduced to {}'.format(filename))
-        self.logger.info('target_block = {}, nth_byte = {}, before/after: {}/{}'.format(target_block, nth_byte, hex(target_value), hex(modified_value)))
+        self.logger.info('target_block = {}, nth_byte = {}, before/after: {}/{}'.format(
+            target_block, nth_byte, hex(target_value), hex(modified_value)))
 
         # insert the record into database
-        record = (filename, os.path.getmtime(filename), disk, target_block, nth_byte, target_value, modified_value)
+        record = (filename, os.path.getmtime(filename), disk, target_block,
+                  nth_byte, target_value, modified_value)
         self.db.insert_record(record)
         self.userlogger.info('CORRUPT record: {}'.format(record))
-            
+
         return self.dd_drop_cache(filename)
 
-
     def perform_bit_inversion(self, nth_byte, nth_bit):
-        self.logger.debug('nth_byte = {}, nth_bit = {}'.format(nth_byte,7))
+        """ perform single bit inversion
+        """
+        self.logger.debug('nth_byte = {}, nth_bit = {}'.format(nth_byte, 7))
         with open(self._tmpfile, "rb+") as f:
             f.seek(nth_byte)
             target_value = f.read(1)
@@ -159,47 +168,49 @@ class Corruptor:
                 f.write(modified_value.to_bytes(1, byteorder=sys.byteorder))
             else:
                 f.write(chr(modified_value))
-            self.logger.info('nth_byte = {} before/after: {}/{}'.format(nth_byte, hex(ord(target_value)), hex(modified_value)))
+            self.logger.info('nth_byte = {} before/after: {}/{}'
+                             .format(nth_byte, hex(ord(target_value)), hex(modified_value)))
             return (ord(target_value), modified_value)
 
-
     def revert_all(self):
+        """ revert all corruptions
+        """
         records = self.db.get_all_records()
         for record in records:
-            self.revert_data(record[1]) # record[1] is the filename
-
+            self.revert_data(record[1])  # record[1] is the filename
 
     def revert_data(self, filename):
         """ This function revert the corrupted data
-            Reference: https://www.gnu.org/software/coreutils/manual/html_node/dd-invocation.html#dd-invocation
+            Reference:
+            https://www.gnu.org/software/coreutils/manual/html_node/dd-invocation.html#dd-invocation
         """
         record = self.db.get_record_of_file(filename)
         if record is None:
             self.logger.info('\'{}\' record not found'.format(filename))
-            return
+            return -1
 
-        #record = (id, filename, os.path.getmtime(filename), disk, target_block, 1, orig_value, modified_value)
+        # record = (id, filename, os.path.getmtime(filename), disk, target_block, 1, orig_value, modified_value)
         self.logger.debug(record)
-        record_mtime, record_disk, target_block, nth_byte, orig_value, modified_value = [record[i] for i in (2,3,4,5,6,7)] 
-        self.logger.info('record: filename {}, record_disk {}, target_block {}, nth_byte {}, orig_value {}, modified_value {}'\
-                        .format(filename, record_disk, target_block, nth_byte, hex(orig_value), hex(modified_value)))
+        record_mtime, record_disk, target_block, nth_byte, orig_value, modified_value = \
+            [record[i] for i in (2, 3, 4, 5, 6, 7)]
+        self.logger.info(
+            'record: filename {}, record_disk {}, target_block {}, nth_byte {}, orig_value {}, modified_value {}'.
+            format(filename, record_disk, target_block, nth_byte, hex(orig_value), hex(modified_value)))
         # check if the mtime is still not same as last time
         self.db.delete_record_of_file(filename)
 
-        if os.path.isfile(filename):
-            if record_mtime != os.path.getmtime(filename):
-                self.logger.info('mtime not match! exiting...')
-                return -1
-        else:
+        if not os.path.isfile(filename):
             self.logger.info('{} file does not exist'.format(filename))
             return -1
-        
-        self.logger.debug('target_block is {}'.format(target_block))
-        if target_block == 0:
-            return -1   # something wrong, can't be 0
 
-        # read the 1 block to tempfile using dd
-        if self.dd_read_data(filename, record_disk, target_block) != 0:
+        if record_mtime != os.path.getmtime(filename):
+            self.logger.info('mtime not match! exiting...')
+            return -1
+
+        self.logger.debug('target_block is {}'.format(target_block))
+        # target_block can't be 0
+        if target_block == 0 \
+                or self.dd_read_data(filename, record_disk, target_block) != 0:
             return -1
 
         # revert to original value
@@ -211,10 +222,9 @@ class Corruptor:
                 return -1
 
             self.logger.debug('modified_value {}/ value_read {}'.format(hex(modified_value), hex(ord(target_value))))
-            if modified_value == ord(target_value):
-                self.logger.debug('record value match')
-            else:
-                self.logger.info('modified_value {}/ value_read {} not match! exiting...'.format(hex(modified_value), hex(ord(target_value))))
+            if modified_value != ord(target_value):
+                self.logger.info('modified_value {}/ value_read {} not match! exiting..'.
+                                 format(hex(modified_value), hex(ord(target_value))))
                 return -1
 
             f.seek(nth_byte)
@@ -228,16 +238,18 @@ class Corruptor:
         if self.dd_write_data(filename, record_disk, target_block, 'REVERT') != 0:
             return -1
         self.logger.info('\'{}\' reverted'.format(filename))
-        self.logger.info('target_block = {}, nth_byte = {}, before/after: {}/{}'.format(target_block, nth_byte, hex(ord(target_value)), hex(orig_value)))
+        self.logger.info('target_block = {}, nth_byte = {}, before/after: {}/{}'.
+                         format(target_block, nth_byte, hex(ord(target_value)), hex(orig_value)))
 
         return self.dd_drop_cache(filename)
 
-
     def call_subprocess(self, args):
+        """ invoke subprocess to execute args command
+        """
         self.logger.debug(args)
         try:
             if sys.version_info[0] >= 3:
-                output = subprocess.check_output(args,encoding='UTF-8', stderr=subprocess.STDOUT)
+                output = subprocess.check_output(args, encoding='UTF-8', stderr=subprocess.STDOUT)
             else:
                 output = subprocess.check_output(args, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError:
@@ -246,8 +258,9 @@ class Corruptor:
             self.logger.debug(output)
         return (0, output)
 
-
     def dd_read_data(self, filename, disk, target_block):
+        """ read data through dd cmd
+        """
         skip_str = 'skip={}'.format(target_block)
         if_str = 'if={}'.format(disk)
         of_str = 'of={}'.format(self._tmpfile)
@@ -257,14 +270,15 @@ class Corruptor:
             self.logger.error("dd_read_data fail")
         return ret
 
-
     def dd_write_data(self, filename, disk, target_block, op):
+        """ write data through dd cmd
+        """
         self.userlogger.info('{} START filename = {}, target_block = {}'.format(op, filename, target_block))
         seek_str = 'seek={}'.format(target_block)
         if_str = 'if={}'.format(self._tmpfile)
         of_str = 'of={}'.format(disk)
         cmd_args = ['dd', 'bs=4096', 'count=1', if_str, of_str, seek_str, 'oflag=direct', 'conv=notrunc']
-        ret, output  = self.call_subprocess(cmd_args)
+        ret, output = self.call_subprocess(cmd_args)
         if ret == 0:
             self.userlogger.info('{} END success'.format(op))
         else:
@@ -272,36 +286,31 @@ class Corruptor:
             self.logger.error('dd_write_data() {} fail'.format(op))
         return ret
 
-
     def dd_drop_cache(self, filename):
+        """ drop cache so corrupt can take effect
+        """
         with open(filename, "rb+") as f:
             fd = f.fileno()
-            os.fsync(fd)    # to make drop cache effective, first call fsync to force write to disk
+            os.fsync(fd)  # to make drop cache effective, first call fsync to force write to disk
         of_str = 'of={}'.format(filename)
         cmd_args = ['dd', of_str, 'oflag=nocache', 'conv=notrunc,fdatasync', 'count=0']
         ret, output = self.call_subprocess(cmd_args)
         return ret
-        
 
     def has_been_corrupted(self, filename):
         """ read the record file and check if the file is already corrupted
         """
         record = self.db.get_record_of_file(filename)
-        #self.logger.error(record)
-        if record is not None:
-            return True
-        else:
-            return False
-
+        # self.logger.error(record)
+        return bool(record is not None)
 
     def corrupt_file(self, filename):
         """ Corrupt the file
         """
-        if random.random() >= g_probability:
-            self.logger.info('probability = {} , not corrupting this time'.format(g_probability))
+        if random.random() >= self.probability:
+            self.logger.info('probability = {} , not corrupting this time'.format(self.probability))
             return -1
-        else:
-            self.logger.info('probability = {} , corrupting {}'.format(g_probability, filename))
+        self.logger.info('probability = {} , corrupting {}'.format(self.probability, filename))
 
         if not os.path.isfile(filename) or os.path.getsize(filename) == 0:
             self.logger.warning('{}, file not existed or size = 0'.format(filename))
@@ -312,7 +321,7 @@ class Corruptor:
             return -1
 
         disk, array_extent_info, err = self.get_file_info(filename)
-        if array_extent_info == None:
+        if array_extent_info is None:
             self.logger.error('{} error = {}'.format(filename, err))
             return -1
 
@@ -322,9 +331,9 @@ class Corruptor:
             return -1
         return 0
 
-
     def corrupt_file_under_folder(self, path, pattern, recursive):
-        """ pick one of the file under the specified directory and call corrupt_file()
+        """ pick one of the file under the specified directory
+            and call corrupt_file()
         """
         self.logger.info('filename pattern = {}'.format(pattern))
         self.logger.warning('recursive = {}'.format(recursive))
@@ -334,7 +343,8 @@ class Corruptor:
             for root, dirs, filenames in os.walk(path):
                 for matched_file in fnmatch.filter(filenames, pattern):
                     matched_filepath = os.path.join(root, matched_file)
-                    if not self.has_been_corrupted(matched_filepath) and not os.path.getsize(matched_filepath) == 0:
+                    if not self.has_been_corrupted(matched_filepath) \
+                            and not os.path.getsize(matched_filepath) == 0:
                         files.append(matched_filepath)
         else:
             for matched_file in fnmatch.filter(os.listdir(path), pattern):
@@ -347,48 +357,43 @@ class Corruptor:
         if not files:
             self.logger.info('no file to corrupt')
             return -1
-        else:
-            self.logger.info('files count = {}'.format(len(files)))
-            victim_file = random.choice(files)
-            #self.logger.info('pick a victim: {}'.format(victim_file))
-            return self.corrupt_file(os.path.abspath(victim_file))
-        return 0
+
+        self.logger.info('files count = {}'.format(len(files)))
+        victim_file = random.choice(files)
+        # self.logger.info('pick a victim: {}'.format(victim_file))
+        return self.corrupt_file(os.path.abspath(victim_file))
 
 
 def run_corrupt(args):
-    
-    # setup log and database
+    """ parse the args and trigger the corrupt
+    """
     config = configparser.ConfigParser()
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    config_file_path = os.path.join(dir_path, CONFIG_FILE) 
+    config_file_path = os.path.join(dir_path, CONFIG_FILE)
     config.read(config_file_path)
     db_file = config['Paths']['database_file']
     log_dir = config['Paths']['log_dir']
-    
+
     if not db_file:
         sys.exit('exit(): database_file configuration error')
     if not os.path.isdir(log_dir):
         sys.exit('exit(): log_dir in config file doesnt exist')
 
     cj = Corruptor(args.quiet, log_dir)
-    cj.db = Database(cj.logger)
     if cj.db.connect(db_file) != 0:
-       return
+        return
     cj.db.create_table()
 
     # settings
-    global g_probability, g_corrupt_byte_index
-    g_probability = 1
-    g_corrupt_byte_index = 0
-    if args.probability != None and args.probability >= 0 and args.probability < 1:
-        g_probability = args.probability
-        cj.logger.info('probability = {}'.format(g_probability))
+    if args.probability is not None and 0 <= args.probability < 1:
+        cj.probability = args.probability
+        cj.logger.info('probability = {}'.format(cj.probability))
     if args.index:
-        g_corrupt_byte_index = int(args.index)
+        cj.corrupt_byte_index = int(args.index)
 
     # CJ operation starts:
     # --revert
-    if args.revert: 
+    if args.revert:
         if args.target_files:
             for file in args.target_files:
                 cj.revert_data(os.path.abspath(file))
@@ -397,30 +402,32 @@ def run_corrupt(args):
         return
 
     # --filelist
-    elif args.inputfile:
+    if args.inputfile:
         with open(os.path.abspath(args.inputfile)) as f:
             for line in f:
                 file = line.strip()
                 cj.corrupt_file(os.path.abspath(file))
 
     # --onetime
-    elif not args.wait: # it is a normal onetime corrupt operation
-        if args.target_directory and args.target_files: # -d and -f is given
+    elif not args.wait:  # it is a normal onetime corrupt operation
+        if args.target_directory and args.target_files:  # -d and -f is given
             if not os.path.isdir(os.path.abspath(args.target_directory)):
                 sys.exit('exit(): -d <directory> doesnt exist')
             else:
-                cj.corrupt_file_under_folder(os.path.abspath(args.target_directory), args.target_files[0], args.recursive)
-        elif args.target_files: # only -f is given
+                cj.corrupt_file_under_folder(
+                    os.path.abspath(args.target_directory),
+                    args.target_files[0], args.recursive)
+        elif args.target_files:  # only -f is given
             for file in args.target_files:
                 cj.corrupt_file(os.path.abspath(file))
         else:
             sys.exit('exit(): -f option is not given')
 
     # --wait
-    else: 
-        if not args.target_directory or not args.target_files: 
+    else:
+        if not args.target_directory or not args.target_files:
             sys.exit('exit(): file and directory must be given')
-        folder  = os.path.abspath(args.target_directory)
+        folder = os.path.abspath(args.target_directory)
         pattern = args.target_files[0]
         if not os.path.isdir(folder):
             sys.exit('exit(): -d <directory> doesnt exist')
@@ -440,9 +447,9 @@ def run_corrupt(args):
                         cj.corrupt_file(file)
                         break
                 else:
-                    if fnmatch.fnmatch(os.path.basename(file), pattern) and os.path.dirname(file) == os.path.abspath(args.target_directory) :
+                    if fnmatch.fnmatch(os.path.basename(file), pattern) \
+                            and os.path.dirname(file) == os.path.abspath(args.target_directory):
                         cj.corrupt_file(file)
                         break
             except KeyboardInterrupt:
                 break
-

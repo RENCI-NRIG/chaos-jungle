@@ -7,16 +7,15 @@ The script provides corruption service by running cj_corrupt.py
 import argparse
 import os
 import sys
-from cj_corrupt import run_corrupt
 from crontab import CronTab
+from cj_corrupt import run_corrupt
+
 
 var_run_file = '/var/run/chaosjungle'
 
+
 def is_cj_running():
-    if os.path.isfile(var_run_file):
-        return True
-    else:
-        return False
+    return os.path.isfile(var_run_file)
 
 def mark_cj_running(args):
     with open(var_run_file, 'w') as f:
@@ -29,7 +28,7 @@ def unmark_cj_running():
         except:
             return
 
-def start(mycron, args): 
+def start(mycron, args):
 
     if is_cj_running():
         sys.exit('exit(): Chaos jungle service is already running. use --stop first')
@@ -38,19 +37,19 @@ def start(mycron, args):
         sys.exit('exit(): please provide -d, -f and -F <frequency> when using --start')
 
     if not args.recursive:
-        print ('RECURSIVE is OFF')
+        print('RECURSIVE is OFF')
     else:
-        print ('RECURSIVE is ON')
+        print('RECURSIVE is ON')
 
     filepath = os.path.realpath(__file__)
 
-    for i in range (0, len(sys.argv)-1):
+    for i in range(0, len(sys.argv)-1):
         if sys.argv[i] == '-f' or sys.argv[i] == '-d':
             sys.argv[i+1] = '\'' + sys.argv[i+1] + '\''
             i += 1
 
     sys.argv.remove('--start')
-    cmdlist = (['python3'] + [filepath] + ['--onetime'] + sys.argv[1:] +['>/dev/null'] +['2>&1'])
+    cmdlist = (['python3'] + [filepath] + ['--onetime'] + sys.argv[1:] + ['>/dev/null'] + ['2>&1'])
     cmdstr = ' '.join(cmdlist)
     job = mycron.new(command=cmdstr, comment='cj_corrupt')
 
@@ -60,21 +59,21 @@ def start(mycron, args):
             mark_cj_running(args)
             job.every(hour).hours()
             mycron.write()
-            print ('start chaos jungle service every {} hour'.format(hour))
+            print('start chaos jungle service every {} hour'.format(hour))
             return
     elif args.frequency.find('m') >= 0:
-        min = int(args.frequency[:args.frequency.find('m')])
-        if min < 60:
+        mins = int(args.frequency[:args.frequency.find('m')])
+        if mins < 60:
             mark_cj_running(args)
-            job.minute.every(min)
+            job.minute.every(mins)
             mycron.write()
-            print ('start chaos jungle service every {} min'.format(min))
+            print('start chaos jungle service every {} min'.format(mins))
             return
     sys.exit('exit(): invalid -F frequency')
 
 
 def stop(mycron):
-    print ('stop chaos jungle service')
+    print('stop chaos jungle service')
     unmark_cj_running()
     mycron.remove_all(comment='cj_corrupt')
     mycron.write()
