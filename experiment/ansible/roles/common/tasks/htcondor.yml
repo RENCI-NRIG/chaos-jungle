@@ -1,0 +1,10 @@
+
+- name: HTCondor config file
+  template:
+    src: files/htcondor/50-main.config
+    dest: /etc/condor/config.d/50-main.config
+  notify: Restart HTCondor
+
+
+
+

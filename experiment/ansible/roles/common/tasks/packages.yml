@@ -1,0 +1,42 @@
+
+### Repos
+
+- name: HTCondor Key
+  apt_key:
+    url: https://research.cs.wisc.edu/htcondor/debian/HTCondor-Release.gpg.key
+    state: present
+
+- apt_repository:
+    repo: deb http://research.cs.wisc.edu/htcondor/ubuntu/8.8/bionic bionic contrib
+    state: present
+    filename: htcondor
+
+- name: Pegasus Key
+  apt_key:
+    url: http://download.pegasus.isi.edu/pegasus/gpg.txt
+    state: present
+
+# Currently we use 5.0.0dev pacakges
+#- apt_repository:
+#    repo: deb http://download.pegasus.isi.edu/pegasus/ubuntu bionic main
+#    state: present
+#    filename: pegasus
+
+### Upgrade all
+
+- name: Upgrade all packages to the latest version
+  apt:
+    name: "*"
+    state: latest
+    force_apt_get: True
+
+### Packages
+
+- name: Install HTCondor
+  apt:
+    name: condor
+
+- name: Install Pegasus
+  apt:
+    deb: https://download.pegasus.isi.edu/pegasus/5.0.0dev/pegasus_5.0.0~dev202002182220-1+ubuntu18_amd64.deb
+

@@ -1,0 +1,14 @@
+
+- name: Mats Rynge
+  user:
+    name: rynge
+    uid: 1005
+
+- name: Mats' keys
+  authorized_key:
+    user: rynge
+    state: present
+    key: '{{ item }}'
+  with_file:
+    - public_keys/rynge
+
