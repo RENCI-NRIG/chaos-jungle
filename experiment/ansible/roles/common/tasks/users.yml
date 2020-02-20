@@ -2,6 +2,7 @@
 - name: Mats Rynge
   user:
     name: rynge
+    shell: /bin/bash
     uid: 1005
 
 - name: Mats' keys

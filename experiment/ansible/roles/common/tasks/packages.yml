@@ -38,5 +38,5 @@
 
 - name: Install Pegasus
   apt:
-    deb: https://download.pegasus.isi.edu/pegasus/5.0.0dev/pegasus_5.0.0~dev202002182220-1+ubuntu18_amd64.deb
+    deb: https://download.pegasus.isi.edu/pegasus/5.0.0dev/pegasus_5.0.0~dev-1+ubuntu18_amd64.deb
 
